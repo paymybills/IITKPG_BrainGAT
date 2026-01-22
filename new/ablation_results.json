@@ -1,0 +1,16 @@
+{
+  "window_length": {
+    "60": 40.85,
+    "80": 47.5,
+    "100": 81.25
+  },
+  "temporal_ablation": {
+    "full_model": 63.75,
+    "spatial_only": 56.25
+  },
+  "multi_scale": {
+    "single_k30": 52.5,
+    "two_scale": 60.0,
+    "full": 57.5
+  }
+}
