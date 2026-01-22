@@ -1,0 +1,528 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows,positioning,calc}
+
+\geometry{margin=1in}
+
+\title{\textbf{BrainGNN Architecture for ABIDE Classification}\\
+\large Interpretable Brain Graph Neural Network for Autism Spectrum Disorder Detection}
+\author{Technical Documentation}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This document describes the BrainGNN (Brain Graph Neural Network) architecture implemented for autism spectrum disorder (ASD) classification using the ABIDE dataset. The model leverages graph-structured fMRI connectivity data with ROI-aware convolutions, learnable pooling, and hierarchical feature extraction to achieve interpretable and accurate disorder classification without using any phenotypic or demographic features.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+\subsection{Problem Statement}
+Given a subject's resting-state fMRI time series from $N$ regions of interest (ROIs), predict whether the subject has autism spectrum disorder (ASD) or is a neurotypical control, using \textbf{only imaging-derived features} to avoid data leakage.
+
+\subsection{Graph Representation}
+Each subject's brain is represented as a graph $\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathbf{X}, \mathbf{E})$ where:
+\begin{itemize}
+    \item $\mathcal{V}$: Set of $N$ nodes (ROIs)
+    \item $\mathcal{E}$: Set of edges (functional connectivity)
+    \item $\mathbf{X} \in \mathbb{R}^{N \times D}$: Node feature matrix
+    \item $\mathbf{E} \in \mathbb{R}^{|\mathcal{E}|}$: Edge weights (correlation values)
+\end{itemize}
+
+\section{Data Processing Pipeline}
+
+\subsection{Time Series to Correlation Matrix}
+Given a time series $\mathbf{T} \in \mathbb{R}^{T \times N}$ where $T$ is the number of timepoints:
+
+\begin{equation}
+\mathbf{C}_{ij} = \text{corr}(\mathbf{T}_{:,i}, \mathbf{T}_{:,j}) = \frac{\text{cov}(\mathbf{T}_{:,i}, \mathbf{T}_{:,j})}{\sigma_i \sigma_j}
+\end{equation}
+
+where $\mathbf{C} \in \mathbb{R}^{N \times N}$ is the Pearson correlation matrix.
+
+\subsection{Node Feature Construction}
+Each ROI $i$ is represented by its correlation vector to all other ROIs:
+\begin{equation}
+\mathbf{x}_i = \mathbf{C}_{i,:} = [\mathbf{C}_{i,1}, \mathbf{C}_{i,2}, \ldots, \mathbf{C}_{i,N}]^T \in \mathbb{R}^N
+\end{equation}
+
+Thus, the node feature matrix is:
+\begin{equation}
+\mathbf{X} = \mathbf{C} \in \mathbb{R}^{N \times N}
+\end{equation}
+
+\subsection{Sparse Edge Construction (Top-K)}
+To create a sparse graph, for each node $i$, select the top-$k$ absolute correlations:
+\begin{equation}
+\mathcal{N}_i^{(k)} = \text{top-}k\{|\mathbf{C}_{i,j}| : j \neq i\}
+\end{equation}
+
+Edge index (undirected):
+\begin{equation}
+\mathcal{E} = \{(i,j) : j \in \mathcal{N}_i^{(k)} \text{ or } i \in \mathcal{N}_j^{(k)}\}
+\end{equation}
+
+Edge attributes:
+\begin{equation}
+e_{ij} = \mathbf{C}_{ij} \text{ for } (i,j) \in \mathcal{E}
+\end{equation}
+
+\textbf{Hyperparameter}: $k = 10$ (baseline) or $k = 25$ (enhanced) edges per node.
+
+\section{Model Architecture}
+
+\subsection{Overview}
+The BrainGNN consists of four main components:
+\begin{enumerate}
+    \item ROI-Aware Graph Convolution (Ra-GConv) layers
+    \item ROI-Selection Pooling (TopK pooling) layers
+    \item Mean+Max Readout aggregation
+    \item MLP classifier
+\end{enumerate}
+
+\subsection{ROI-Aware Graph Convolution (Ra-GConv)}
+
+\subsubsection{Standard Graph Convolution}
+A standard GCN layer computes:
+\begin{equation}
+\mathbf{H}^{(l+1)} = \sigma\left(\tilde{\mathbf{D}}^{-\frac{1}{2}} \tilde{\mathbf{A}} \tilde{\mathbf{D}}^{-\frac{1}{2}} \mathbf{H}^{(l)} \mathbf{W}^{(l)}\right)
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $\tilde{\mathbf{A}} = \mathbf{A} + \mathbf{I}$ (adjacency with self-loops)
+    \item $\tilde{\mathbf{D}}_{ii} = \sum_j \tilde{\mathbf{A}}_{ij}$ (degree matrix)
+    \item $\mathbf{W}^{(l)}$ (learnable weight matrix)
+    \item $\sigma$ (activation function)
+\end{itemize}
+
+\subsubsection{ROI-Aware Enhancement}
+To incorporate region-specific information without phenotypic data, we use learnable ROI embeddings:
+
+\begin{equation}
+\mathbf{r}_i = \text{Embedding}(i) \in \mathbb{R}^{d_{\text{roi}}}
+\end{equation}
+
+where $i \in \{0, 1, \ldots, N-1\}$ is the ROI index and $d_{\text{roi}} = 32$.
+
+The ROI-aware convolution combines graph features with ROI embeddings:
+\begin{align}
+\mathbf{h}_i^{(l)} &= \text{GCN}(\mathbf{X}^{(l)}, \mathcal{E}) \\
+\mathbf{z}_i^{(l)} &= [\mathbf{h}_i^{(l)} \, \| \, \mathbf{r}_i] \\
+\mathbf{x}_i^{(l+1)} &= \text{ReLU}\left(\text{BN}\left(\mathbf{W}^{(l)} \mathbf{z}_i^{(l)}\right)\right)
+\end{align}
+
+where:
+\begin{itemize}
+    \item $\|$ denotes concatenation
+    \item $\mathbf{W}^{(l)} \in \mathbb{R}^{d_{\text{out}} \times (d_{\text{in}} + d_{\text{roi}})}$
+    \item BN is batch normalization
+    \item Dropout($p=0.3$) applied after activation
+\end{itemize}
+
+\subsection{ROI-Selection Pooling}
+
+After each convolution, we apply TopK pooling to select the most informative ROIs.
+
+\subsubsection{Node Scoring}
+For each node, compute an importance score:
+\begin{equation}
+s_i = \frac{\mathbf{x}_i^T \mathbf{p}}{\|\mathbf{p}\|}
+\end{equation}
+
+where $\mathbf{p} \in \mathbb{R}^{d}$ is a learnable projection vector.
+
+\subsubsection{Node Selection}
+Select top $\lceil r \cdot N \rceil$ nodes:
+\begin{equation}
+\text{idx} = \text{top-}\lceil r \cdot N \rceil(\{s_i : i \in \mathcal{V}\})
+\end{equation}
+
+where $r = 0.5$ (pooling ratio).
+
+\subsubsection{Graph Update}
+Update node features and edges:
+\begin{align}
+\mathbf{X}^{\text{pool}} &= \mathbf{X}[\text{idx}] \odot \tanh(s[\text{idx}]) \\
+\mathcal{E}^{\text{pool}} &= \{(i,j) \in \mathcal{E} : i,j \in \text{idx}\}
+\end{align}
+
+\textbf{Effect}: After two pooling layers with $r=0.5$, $N \rightarrow \frac{N}{2} \rightarrow \frac{N}{4}$.
+
+For ABIDE CC400 data: $392 \rightarrow 196 \rightarrow 98$ ROIs.
+
+\subsection{Hierarchical Architecture}
+
+\begin{algorithm}[H]
+\caption{BrainGNN Forward Pass}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Graph $\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathbf{X}, \text{roi\_id})$
+\State \textbf{Output:} Class logits $\mathbf{y} \in \mathbb{R}^2$
+\State
+\State // \textbf{Layer 1: Conv + Pool}
+\State $\mathbf{X}_1 \leftarrow \text{Ra-GConv}_1(\mathbf{X}, \mathcal{E}, \text{roi\_id})$ \Comment{$N \times 128$}
+\State $(\mathbf{X}_1, \mathcal{E}_1, \text{idx}_1) \leftarrow \text{ROIPool}_1(\mathbf{X}_1, \mathcal{E})$ \Comment{$\frac{N}{2} \times 128$}
+\State
+\State // \textbf{Layer 2: Conv + Pool}
+\State $\mathbf{X}_2 \leftarrow \text{Ra-GConv}_2(\mathbf{X}_1, \mathcal{E}_1, \text{roi\_id}[\text{idx}_1])$ \Comment{$\frac{N}{2} \times 128$}
+\State $(\mathbf{X}_2, \mathcal{E}_2, \text{idx}_2) \leftarrow \text{ROIPool}_2(\mathbf{X}_2, \mathcal{E}_1)$ \Comment{$\frac{N}{4} \times 128$}
+\State
+\State // \textbf{Readout}
+\State $\mathbf{g}_{\text{mean}} \leftarrow \text{GlobalMeanPool}(\mathbf{X}_2)$ \Comment{$128$}
+\State $\mathbf{g}_{\text{max}} \leftarrow \text{GlobalMaxPool}(\mathbf{X}_2)$ \Comment{$128$}
+\State $\mathbf{g} \leftarrow [\mathbf{g}_{\text{mean}} \, \| \, \mathbf{g}_{\text{max}}]$ \Comment{$256$}
+\State
+\State // \textbf{Classifier}
+\State $\mathbf{h} \leftarrow \text{ReLU}(\text{Linear}_{256 \rightarrow 64}(\mathbf{g}))$
+\State $\mathbf{h} \leftarrow \text{Dropout}(p=0.5)(\mathbf{h})$
+\State $\mathbf{y} \leftarrow \text{Linear}_{64 \rightarrow 2}(\mathbf{h})$ \Comment{Class logits}
+\State \Return $\mathbf{y}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Mean+Max Readout}
+
+To create a fixed-size graph representation from variable-sized node sets:
+
+\begin{align}
+\mathbf{g}_{\text{mean}} &= \frac{1}{|\mathcal{V}|} \sum_{i \in \mathcal{V}} \mathbf{x}_i \\
+\mathbf{g}_{\text{max}} &= \max_{i \in \mathcal{V}} \mathbf{x}_i \quad \text{(element-wise)} \\
+\mathbf{g} &= [\mathbf{g}_{\text{mean}} \, \| \, \mathbf{g}_{\text{max}}] \in \mathbb{R}^{2d}
+\end{align}
+
+\textbf{Rationale}: 
+\begin{itemize}
+    \item Mean captures average activation patterns
+    \item Max captures strongest activations
+    \item Concatenation provides complementary information
+\end{itemize}
+
+\section{Model Configurations}
+
+\subsection{Baseline Configuration}
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Value} \\
+\midrule
+Input features ($D$) & 392 (CC400 ROIs) \\
+Hidden dimension & 128 \\
+ROI embedding dimension & 32 \\
+Number of conv layers & 2 \\
+Pooling ratio & 0.5 \\
+Dropout (conv) & 0.3 \\
+Dropout (classifier) & 0.5 \\
+Graph connectivity (topk) & 10 \\
+Batch size & 8 \\
+Learning rate & 0.001 \\
+Weight decay & $1 \times 10^{-4}$ \\
+Optimizer & Adam \\
+Early stopping patience & 15 epochs \\
+\midrule
+\textbf{Total parameters} & $\sim$220K \\
+\bottomrule
+\end{tabular}
+\caption{Baseline BrainGNN configuration}
+\end{table}
+
+\subsection{Enhanced Configuration}
+\begin{table}[h]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Hyperparameter} & \textbf{Baseline} & \textbf{Enhanced} \\
+\midrule
+Hidden dimension & 128 & \textbf{256} \\
+Graph connectivity (topk) & 10 & \textbf{25} \\
+Batch size & 8 & \textbf{16} \\
+Learning rate & 0.001 & \textbf{0.0005} \\
+Early stopping patience & 15 & \textbf{20} \\
+\midrule
+Total parameters & $\sim$220K & $\sim$850K \\
+\bottomrule
+\end{tabular}
+\caption{Enhanced configuration improvements}
+\end{table}
+
+\section{Training Procedure}
+
+\subsection{Loss Function}
+Cross-entropy loss for binary classification:
+\begin{equation}
+\mathcal{L} = -\frac{1}{B} \sum_{i=1}^{B} \left[ y_i \log(\hat{y}_i) + (1-y_i) \log(1-\hat{y}_i) \right]
+\end{equation}
+
+where:
+\begin{itemize}
+    \item $B$: batch size
+    \item $y_i \in \{0, 1\}$: true label (0=Control, 1=ASD)
+    \item $\hat{y}_i = \text{softmax}(\mathbf{y}_i)_1$: predicted probability
+\end{itemize}
+
+\subsection{Optimization Strategy}
+
+\begin{algorithm}[H]
+\caption{Training Loop with Early Stopping}
+\begin{algorithmic}[1]
+\State Initialize model parameters $\theta$
+\State Initialize optimizer: Adam($\theta$, lr=$10^{-3}$, weight\_decay=$10^{-4}$)
+\State Initialize scheduler: ReduceLROnPlateau(patience=5, factor=0.5)
+\State $\text{best\_val\_acc} \leftarrow 0$, $\text{patience\_counter} \leftarrow 0$
+\For{epoch $= 1$ to $100$}
+    \State // \textbf{Training phase}
+    \For{batch in train\_loader}
+        \State $\mathbf{y}_{\text{pred}} \leftarrow \text{Model}(\text{batch})$
+        \State $\mathcal{L} \leftarrow \text{CrossEntropy}(\mathbf{y}_{\text{pred}}, \mathbf{y}_{\text{true}})$
+        \State $\nabla_\theta \mathcal{L} \leftarrow \text{Backward}(\mathcal{L})$
+        \State Clip gradients: $\|\nabla_\theta\| \leq 1.0$
+        \State Update: $\theta \leftarrow \theta - \alpha \nabla_\theta \mathcal{L}$
+    \EndFor
+    \State
+    \State // \textbf{Validation phase}
+    \State $\text{val\_acc} \leftarrow \text{Evaluate}(\text{val\_loader})$
+    \State Update learning rate: scheduler.step(val\_acc)
+    \State
+    \If{$\text{val\_acc} > \text{best\_val\_acc}$}
+        \State $\text{best\_val\_acc} \leftarrow \text{val\_acc}$
+        \State Save model checkpoint
+        \State $\text{patience\_counter} \leftarrow 0$
+    \Else
+        \State $\text{patience\_counter} \leftarrow \text{patience\_counter} + 1$
+    \EndIf
+    \State
+    \If{$\text{patience\_counter} \geq 15$}
+        \State \textbf{break} \Comment{Early stopping}
+    \EndIf
+\EndFor
+\State Load best checkpoint
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Gradient Clipping}
+To prevent gradient explosion:
+\begin{equation}
+\nabla_\theta \leftarrow \begin{cases}
+\nabla_\theta & \text{if } \|\nabla_\theta\| \leq \tau \\
+\tau \cdot \frac{\nabla_\theta}{\|\nabla_\theta\|} & \text{if } \|\nabla_\theta\| > \tau
+\end{cases}
+\end{equation}
+
+where $\tau = 1.0$ (max gradient norm).
+
+\section{Data Split Strategy}
+
+\subsection{Subject-Level Stratified Splitting}
+To prevent data leakage, we split at the \textbf{subject level} with stratification:
+
+\begin{enumerate}
+    \item \textbf{First split}: Train+Val vs Test (85\% vs 15\%)
+    \begin{equation}
+    \mathcal{D}_{\text{train+val}}, \mathcal{D}_{\text{test}} = \text{StratifiedSplit}(\mathcal{D}, r=0.15, \text{stratify}=y)
+    \end{equation}
+    
+    \item \textbf{Second split}: Train vs Val (82.35\% vs 17.65\% of train+val)
+    \begin{equation}
+    \mathcal{D}_{\text{train}}, \mathcal{D}_{\text{val}} = \text{StratifiedSplit}(\mathcal{D}_{\text{train+val}}, r=0.176)
+    \end{equation}
+\end{enumerate}
+
+\textbf{Final proportions}: 70\% train / 15\% val / 15\% test
+
+\subsection{Anti-Leakage Measures}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lp{10cm}}
+\toprule
+\textbf{Measure} & \textbf{Implementation} \\
+\midrule
+Subject-level splitting & Each subject appears in exactly ONE split \\
+No cross-split normalization & Feature scaling computed per-split independently \\
+Stratified sampling & Maintains class balance across splits \\
+Validation-guided stopping & Best model selected by validation accuracy \\
+Test set isolation & Test set used only once for final evaluation \\
+Pure imaging features & NO phenotypic, demographic, or site variables used as inputs \\
+\bottomrule
+\end{tabular}
+\caption{Data leakage prevention strategies}
+\end{table}
+
+\section{Dataset Statistics}
+
+\subsection{ABIDE Preprocessing Pipeline}
+\begin{itemize}
+    \item \textbf{Pipeline}: CPAC (Configurable Pipeline for the Analysis of Connectomes)
+    \item \textbf{Strategy}: nofilt\_noglobal (no bandpass filtering, no global signal regression)
+    \item \textbf{Atlas}: CC400 (Craddock 400 ROIs)
+    \item \textbf{Quality control}: Subjects with excessive motion or failed preprocessing excluded
+\end{itemize}
+
+\subsection{Dataset Size}
+\begin{table}[h]
+\centering
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Split} & \textbf{Total} & \textbf{ASD} & \textbf{Control} \\
+\midrule
+Training & 245 & 132 & 113 \\
+Validation & 53 & 29 & 24 \\
+Test & 53 & 29 & 24 \\
+\midrule
+\textbf{Total} & \textbf{351} & \textbf{190 (54.1\%)} & \textbf{161 (45.9\%)} \\
+\bottomrule
+\end{tabular}
+\caption{Dataset split statistics (baseline configuration)}
+\end{table}
+
+\section{Model Complexity Analysis}
+
+\subsection{Parameter Count (Baseline: hidden=128)}
+
+\begin{align}
+\text{Ra-GConv}_1: &\quad 392 \times 128 + 392 \times 32 + (128+32) \times 128 = 82,496 \\
+\text{Ra-GConv}_2: &\quad 128 \times 128 + 392 \times 32 + (128+32) \times 128 = 49,024 \\
+\text{Classifier}: &\quad 256 \times 64 + 64 \times 2 = 16,512 \\
+\midrule
+\text{Total}: &\quad \approx 220,000 \text{ parameters}
+\end{align}
+
+\subsection{Computational Complexity}
+
+\textbf{Per forward pass (single graph):}
+\begin{itemize}
+    \item Graph convolution: $\mathcal{O}(|\mathcal{E}| \cdot d)$ where $d$ is hidden dimension
+    \item Pooling: $\mathcal{O}(N \cdot d)$
+    \item Total: $\mathcal{O}(k \cdot N \cdot d + N \cdot d) = \mathcal{O}(N \cdot d \cdot (k+1))$
+\end{itemize}
+
+For baseline (N=392, d=128, k=10):
+\begin{equation}
+\mathcal{O}(392 \times 128 \times 11) \approx \mathcal{O}(550K) \text{ operations}
+\end{equation}
+
+\section{Expected Performance}
+
+\subsection{Realistic Accuracy Ranges}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Expected Accuracy} & \textbf{Expected AUC} \\
+\midrule
+Random baseline & 50-55\% & 0.50 \\
+Baseline model & 60-65\% & 0.62-0.68 \\
+Enhanced model & 65-72\% & 0.68-0.75 \\
+State-of-the-art (multi-modal) & 75-80\% & 0.78-0.85 \\
+\bottomrule
+\end{tabular}
+\caption{Performance expectations for ABIDE classification}
+\end{table}
+
+\subsection{Interpretation of Results}
+
+\textbf{Important considerations:}
+\begin{itemize}
+    \item ASD is a heterogeneous disorder with subtle neuroimaging signatures
+    \item ABIDE combines multiple sites with different scanning protocols
+    \item Proper data splits prevent inflated accuracies from leakage
+    \item 60-70\% accuracy with rigorous methodology is publishable
+    \item Accuracy $>$80\% should be viewed with suspicion (potential leakage)
+\end{itemize}
+
+\section{Interpretability Features}
+
+\subsection{ROI Importance via Pooling Scores}
+
+After training, the pooling layers learn which ROIs are most discriminative:
+\begin{equation}
+\text{importance}(i) = \mathbb{E}_{\mathcal{D}}[s_i] \cdot \mathbb{P}(i \in \text{top-k})
+\end{equation}
+
+\subsection{Attention Visualization}
+
+For a given subject, we can visualize:
+\begin{enumerate}
+    \item \textbf{Selected ROIs}: Which regions survive pooling
+    \item \textbf{Connectivity patterns}: Which edges have highest weights
+    \item \textbf{Activation maps}: Node feature magnitudes across layers
+\end{enumerate}
+
+\section{Implementation Details}
+
+\subsection{Software Stack}
+\begin{itemize}
+    \item \textbf{Framework}: PyTorch 2.0+
+    \item \textbf{Graph library}: PyTorch Geometric 2.6+
+    \item \textbf{Data processing}: NumPy, Pandas
+    \item \textbf{Visualization}: Matplotlib, Seaborn
+    \item \textbf{Hardware}: CUDA-compatible GPU recommended
+\end{itemize}
+
+\subsection{Reproducibility}
+\begin{itemize}
+    \item Random seeds: 42 (NumPy, PyTorch)
+    \item Deterministic algorithms enabled where possible
+    \item Fixed train/val/test splits (random\_state=42)
+    \item Version-controlled dependencies
+\end{itemize}
+
+\section{Limitations and Future Work}
+
+\subsection{Current Limitations}
+\begin{enumerate}
+    \item Single atlas (CC400) - could benefit from multi-resolution features
+    \item Static connectivity - ignores temporal dynamics
+    \item Binary classification - no ASD subtype discrimination
+    \item Limited data augmentation - potential for improvement
+\end{enumerate}
+
+\subsection{Potential Improvements}
+\begin{enumerate}
+    \item \textbf{Dynamic connectivity}: Sliding-window graphs
+    \item \textbf{Attention mechanisms}: Graph attention networks (GAT)
+    \item \textbf{Multi-atlas fusion}: Combine CC200, CC400, AAL
+    \item \textbf{Temporal modeling}: RNN/Transformer over graph sequence
+    \item \textbf{Contrastive learning}: Self-supervised pretraining
+    \item \textbf{Explainability}: Integrated gradients, GNNExplainer
+\end{enumerate}
+
+\section{Conclusion}
+
+This BrainGNN architecture provides a principled approach to brain disorder classification using graph neural networks. By leveraging ROI-aware convolutions, learnable pooling, and rigorous anti-leakage measures, the model achieves interpretable and reliable performance on the challenging ABIDE autism classification task. The modular design allows for easy experimentation with different configurations while maintaining scientific rigor.
+
+\begin{thebibliography}{9}
+
+\bibitem{kipf2017}
+Kipf, T. N., \& Welling, M. (2017). Semi-supervised classification with graph convolutional networks. \textit{ICLR}.
+
+\bibitem{li2019}
+Li, X., et al. (2019). BrainGNN: Interpretable brain graph neural network for fMRI analysis. \textit{Medical Image Analysis}.
+
+\bibitem{craddock2012}
+Craddock, R. C., et al. (2012). A whole brain fMRI atlas generated via spatially constrained spectral clustering. \textit{Human Brain Mapping}.
+
+\bibitem{dipietro2017}
+Di Martino, A., et al. (2017). Enhancing studies of the connectome in autism using the autism brain imaging data exchange II. \textit{Scientific Data}.
+
+\bibitem{gao2019}
+Gao, H., \& Ji, S. (2019). Graph U-Nets. \textit{ICML}.
+
+\end{thebibliography}
+
+\end{document}

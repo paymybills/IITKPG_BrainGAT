@@ -1,0 +1,51 @@
+# CUDA-Compatible Brain GNN Environment
+# PyTorch 2.5.1 with CUDA 12.1 support
+# Exported on: 12 October 2025
+
+## Environment Details:
+- Python: 3.12.0
+- PyTorch: 2.5.1+cu121
+- CUDA: 12.1
+- PyTorch Geometric: 2.6.1
+
+## Core ML/DL Packages:
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+torch-geometric==2.6.1
+torch_cluster==1.6.3+pt23cu121
+torch_scatter==2.1.2+pt23cu121
+torch_sparse==0.6.18+pt23cu121
+pyg_lib==0.4.0+pt23cu121
+
+## CUDA Runtime Libraries:
+nvidia-cublas-cu12==12.1.3.1
+nvidia-cuda-cupti-cu12==12.1.105
+nvidia-cuda-nvrtc-cu12==12.1.105
+nvidia-cuda-runtime-cu12==12.1.105
+nvidia-cudnn-cu12==9.1.0.70
+nvidia-cufft-cu12==11.0.2.54
+nvidia-curand-cu12==10.3.2.106
+nvidia-cusolver-cu12==11.4.5.107
+nvidia-cusparse-cu12==12.1.0.106
+nvidia-nccl-cu12==2.21.5
+nvidia-nvjitlink-cu12==12.9.86
+nvidia-nvtx-cu12==12.1.105
+
+## Data Science & Analysis:
+numpy==2.1.2
+pandas==2.3.2
+scipy==1.16.2
+scikit-learn==1.7.2
+matplotlib==3.10.6
+seaborn==0.13.2
+networkx==3.3
+
+## Jupyter & Development:
+jupyter_client==8.6.3
+jupyter_core==5.8.1
+ipykernel==6.30.1
+ipython==9.5.0
+
+## Utilities:
+tqdm==4.67.1
+requests==2.32.5

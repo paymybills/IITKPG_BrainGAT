@@ -1,0 +1,28 @@
+# Environments
+.venv/
+.venv-py312/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Data & outputs (keep raw ABIDE path ignored by default)
+abide_data/
+outputs/
+checkpoints/
+*.pth
+*.pt
+
+# OS / Editor
+.DS_Store
+.vscode/
+.idea/
+.env
+*.log

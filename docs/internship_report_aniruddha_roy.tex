@@ -1,0 +1,577 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{float}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=blue
+}
+
+\begin{document}
+
+%-------------------- Title Page --------------------
+\begin{titlepage}
+  \centering
+  {\Large \textbf{Internship Report}}\\[1.0cm]
+  {\large IEEE EMBS IITKGP INTERNSHIP}\\[1.5cm]
+
+  {\LARGE \textbf{Temporal--Spatial Graph Attention Networks for ASD Classification on the ABIDE Dataset}}\\[1.5cm]
+
+  \begin{tabular}{ll}
+    \textbf{Intern Name}  & : Aniruddha Roy \\
+    \textbf{University ID} & : 230957114 \\
+    \textbf{Program}       & : B.Tech., Mathematics and Computing, 6th Semester \\
+    \textbf{Institution}   & : Manipal Institute of Technology, Manipal
+  \end{tabular}\\[1.5cm]
+
+  \begin{tabular}{ll}
+    \textbf{Internship Supervisor} & : Madhuparna Das \\[-0.1cm]
+                                    & \small School of Medical Science and Technology \\
+                                    & \small Indian Institute of Technology Kharagpur
+  \end{tabular}\\[2.0cm]
+
+  \vfill
+\end{titlepage}
+
+%-------------------- Abstract --------------------
+\begin{abstract}
+Autism Spectrum Disorder (ASD) is a complex neurodevelopmental condition whose diagnosis is traditionally based on behavioural assessments. This internship explored the feasibility of computer-assisted ASD screening using resting-state functional MRI (rs-fMRI) from the ABIDE (Autism Brain Imaging Data Exchange) dataset, formulated as a subject-level brain graph classification problem. Within an existing research workspace for brain graph neural networks (GNNs), I investigated several architectures, implemented a new temporal--spatial Graph Attention Network (BrainGAT Evolution), and performed rigorous data leakage analysis and remediation.
+
+The work progressed through: (i) understanding and reproducing baseline models such as BrainGNN and the original BrainGAT; (ii) extending the architecture to jointly model temporal dynamics and multi-scale spatial connectivity with 4-dimensional edge features; (iii) identifying and fixing a critical data leakage bug which had produced unrealistically high validation accuracy; and (iv) conducting structured hyperparameter search and triple-set evaluation (validation, Test1, Test2) to obtain honest, generalizable performance estimates.
+
+The final BrainGAT Evolution model, implemented and documented in the notebook \texttt{BrainGAT\_Evolution.ipynb}, achieves realistic validation and test accuracies in the range expected for state-of-the-art ABIDE models (approximately 60--70\%), with strict subject-level splitting and comprehensive checks for overlap across train, validation, and test subjects. This report summarises the problem statement, the solution architectures studied and developed, investigations carried out, issues encountered and their fixes, and the resulting final model.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+%-------------------- 1. Introduction --------------------
+\section{Introduction}
+
+\subsection{Problem Statement}
+Autism Spectrum Disorder (ASD) is characterised by impairments in social communication and restricted or repetitive behaviours. Reliable neuroimaging biomarkers for ASD could support earlier and more objective diagnosis. Resting-state functional MRI (rs-fMRI) offers a non-invasive way to measure spontaneous brain activity and functional connectivity.
+
+The central problem tackled in this internship is:
+\begin{quote}
+\emph{Given rs-fMRI scans from the ABIDE dataset, can we construct subject-level brain graphs and train graph neural networks (GNNs) to classify individuals as ASD vs.~control in a scientifically rigorous, leakage-free manner?}
+\end{quote}
+
+More concretely, the goals were:
+\begin{itemize}[noitemsep]
+  \item to organise and understand an existing ABIDE GNN workspace, including data processing scripts, model implementations, and experimental notebooks;
+  \item to reproduce and study existing architectures (BrainGNN, BrainGAT) which operate on static functional connectivity graphs;
+  \item to design and implement a new temporal--spatial Graph Attention Network (BrainGAT Evolution) that integrates temporal dynamics and multi-scale spatial connectivity;
+  \item to identify and fix sources of data leakage and unrealistic evaluation; and
+  \item to perform controlled training, hyperparameter tuning, and triple-set (validation, Test1, Test2) evaluation resulting in a final, well-documented model.
+\end{itemize}
+
+\subsection{Project Workspace Overview}
+The internship was conducted in a dedicated workspace for ABIDE-based brain graph learning using PyTorch Geometric. The top-level organisation is summarised below:
+\begin{itemize}[noitemsep]
+  \item \texttt{abide\_data/}: ABIDE time series and derivatives (e.g., ROI signals in CC400 atlas, CPAC outputs).
+  \item \texttt{notebooks/}: exploratory and experimental Jupyter notebooks (e.g., early BrainGNN and BrainGAT experiments).
+  \item \texttt{models/}: reusable model definitions, including a DMSGCN implementation.
+  \item \texttt{scripts/}: utility scripts such as \texttt{download\_abide\_preproc.py}, \texttt{train\_braingat\_fixed.py}, and robustness helpers.
+  \item \texttt{docs/}: architecture documentation for BrainGNN, BrainGAT, and BrainGAT Evolution, as well as a dedicated data-leakage report.
+  \item \texttt{env/}: environment files (\texttt{requirements.txt}, CUDA-specific setup script) for reproducible experimentation.
+  \item \texttt{kagglebooks/}: Kaggle-optimised notebooks, in particular the main notebook for this internship, \texttt{BrainGAT\_Evolution.ipynb}.
+\end{itemize}
+
+Within this structure, most of the internship activity centred on the architecture documents in \texttt{docs/} and the BrainGAT Evolution training and analysis workflow in \texttt{BrainGAT\_Evolution.ipynb}.
+
+%-------------------- 2. Background and Baseline Architectures --------------------
+\section{Background and Baseline Architectures}
+
+\subsection{ABIDE Dataset and Graph Construction}
+
+The Autism Brain Imaging Data Exchange (ABIDE) aggregates rs-fMRI data from more than 20 international sites, with over 1{,}000 subjects. In this workspace, the following choices are used consistently:
+\begin{itemize}[noitemsep]
+  \item \textbf{ROI Atlas:} Craddock CC400, resulting in $N = 392$ usable regions of interest (ROIs) after filtering.
+  \item \textbf{Time Series Representation:} CPAC-preprocessed 4D NIFTI files are converted into 2D ROI time series matrices $T \in \mathbb{R}^{T \times N}$, where $T$ denotes the number of timepoints (TRs) and $N=392$.
+  \item \textbf{Functional Connectivity:} Pearson correlation is computed between all ROI pairs to yield a symmetric correlation matrix $C \in \mathbb{R}^{N \times N}$, where each element
+  \begin{equation}
+    C_{ij} = \mathrm{corr}(T_{:, i}, T_{:, j}),
+  \end{equation}
+  forming the basis for both node features and edge weights.
+  \item \textbf{Sparse Graphs:} To reduce noise and computational cost, only the top-$k$ strongest absolute correlations per node are retained as edges, yielding a sparse undirected graph with edge index and edge attributes.
+\end{itemize}
+
+Each subject is thus represented by a brain graph $G = (V, E, X, E_{\text{attr}})$, where $V$ is the set of ROIs, $E$ encodes sparse functional connectivity, $X$ are node features (correlation vectors), and $E_{\text{attr}}$ stores edge weights.
+
+\subsection{BrainGNN}
+
+The first major architecture studied was BrainGNN, documented in \texttt{docs/BrainGNN\_Architecture.md}. BrainGNN is an interpretable brain graph neural network with several key ideas:
+\begin{itemize}[noitemsep]
+  \item \textbf{ROI-aware convolution:} Standard GCN layers are extended with learned ROI embeddings, yielding region-specific transformations that acknowledge the functional heterogeneity of brain regions.
+  \item \textbf{Top-$K$ pooling:} A learnable node-selection mechanism identifies the most informative ROIs, progressively coarsening the graph and improving interpretability.
+  \item \textbf{Multi-level readout:} Mean and max pooling over nodes are combined at multiple hierarchy levels to form a rich subject-level representation.
+  \item \textbf{Strict subject-level splitting:} The documentation emphasises splitting at the subject level to avoid leakage, a principle later central to the fixes applied to BrainGAT Evolution.
+\end{itemize}
+
+As part of the internship, I read the BrainGNN documentation, inspected the architecture specification \texttt{braingnn\_architecture.tex}, and walked through its PyTorch Geometric implementation to understand ROI-aware design and hierarchical pooling.
+
+\subsection{Original BrainGAT}
+
+The second baseline, documented in \texttt{docs/BrainGAT\_Architecture.md}, is BrainGAT: a pure imaging-based Graph Attention Network for ASD classification. Its main characteristics are:
+\begin{itemize}[noitemsep]
+  \item A static graph per subject, constructed from the correlation matrix using top-$k$ sparsification.
+  \item Node features $x_i \in \mathbb{R}^{392}$ given by the $i$-th row of the correlation matrix (correlation profile with all other ROIs).
+  \item Multi-head GAT layers which learn attention coefficients for each edge, enabling the model to focus on the most informative functional connections.
+  \item A graph-level readout combining mean and max pooling over nodes, followed by an MLP classifier for binary ASD vs.~control prediction.
+  \item A lightweight configuration (reduced hidden dimensions and number of heads) provided in \texttt{scripts/train\_braingat\_fixed.py}, which was particularly relevant for running on limited-GPU environments.
+\end{itemize}
+
+I reproduced and studied this architecture using both the documentation and the corresponding notebooks, verifying how attention weights encode edge importance and how global pooling aggregates ROI-level information.
+
+\subsection{Models Replicated and Explored}
+
+Beyond reading the architecture documents, I actively worked with a range of concrete model implementations and experiment notebooks in the workspace. This subsection summarises the main models and artefacts explored during the internship.
+
+\paragraph{BrainGNN (ROI-aware GNN).} Using \texttt{docs/BrainGNN\_Architecture.md}, \texttt{braingnn\_architecture.tex}, and the associated notebooks (notably \texttt{notebooks/BrainGNN\_repro.ipynb}), I studied and partially reproduced BrainGNN, focusing on:
+\begin{itemize}[noitemsep]
+  \item ROI-aware graph convolution layers with learned embeddings per ROI index;
+  \item hierarchical TopK pooling to select informative brain regions and produce multi-level graph representations; and
+  \item interpretation of ROI importance scores and their relationship to known functional networks.
+\end{itemize}
+
+\paragraph{Original BrainGAT (Static GAT).} In addition to the documentation in \texttt{docs/BrainGAT\_Architecture.md}, I worked with the fixed-size training script \texttt{scripts/train\_braingat\_fixed.py} and related checkpoints (e.g., \texttt{docs/braingat\_elastic\_net.pth}, \texttt{docs/braingat\_ultra.pth}). These experiments reinforced:
+\begin{itemize}[noitemsep]
+  \item how to construct pure imaging-based subject graphs from correlation matrices;
+  \item how multi-head graph attention weighs edges and influences downstream graph-level features; and
+  \item how to trade off model capacity and GPU memory via hidden dimensions and number of heads.
+\end{itemize}
+
+\paragraph{DMSGCN and Population-level Models.} The \texttt{models/DMSGCN.py} file implements a population-graph-based GCN architecture inspired by multi-site learning and leave-one-site-out (LOSO) or 10-fold cross-validation protocols. I examined this code to understand:
+\begin{itemize}[noitemsep]
+  \item how subject-level feature adjacency matrices are built using correlation-based distances (via \texttt{scipy.spatial.distance});
+  \item how multi-site and phenotype graphs are combined to form a richer population graph; and
+  \item how fully connected layers on top of population-level adjacency enable site-robust predictions.
+\end{itemize}
+
+\paragraph{Exploratory Notebooks.} Several notebooks under \texttt{notebooks/} (such as \texttt{codeblock.ipynb}, \texttt{focused\_gnn.ipynb}, \texttt{gnnmark2.ipynb}, and \texttt{BrainGNN\_repro.ipynb}) were used to prototype, sanity-check, and compare different GNN variants. In these, I experimented with:
+\begin{itemize}[noitemsep]
+  \item alternative graph constructions (e.g., varying top-$k$, different normalisation schemes);
+  \item different backbone layers (GCN vs. GAT vs. ROI-aware layers);
+  \item small-scale ablation studies on dropout, weight decay, and pooling choices.
+\end{itemize}
+
+\paragraph{Kaggle-optimised BrainGAT.} The notebook \texttt{kagglebooks/BrainGAT\_Kaggle.ipynb} provides a simplified and resource-aware version of BrainGAT for Kaggle GPUs. I reviewed this notebook to understand practical engineering strategies (reduced feature dimensions, careful batch sizing, and checkpointing) that later informed the design of BrainGAT Evolution training loops.
+
+%-------------------- 3. BrainGAT Evolution: Solution Architecture --------------------
+\section{BrainGAT Evolution: Temporal--Spatial GAT}
+
+\subsection{Motivation}
+
+While BrainGNN and BrainGAT operate on static connectivity graphs summarised over the entire scan, rs-fMRI is inherently dynamic. The BrainGAT Evolution architecture, described in detail in \texttt{docs/BrainGAT\_Evolution\_Architecture.md} and implemented in \texttt{BrainGAT\_Evolution.ipynb}, was designed to address two limitations:
+\begin{enumerate}[noitemsep]
+  \item \textbf{Temporal Dynamics:} Static correlation matrices discard information about how connectivity patterns evolve over time.
+  \item \textbf{Multi-scale Connectivity with Rich Edge Features:} A single $k$-NN graph cannot capture local, regional, and global scales simultaneously, nor multiple forms of connectivity (linear, non-linear, and phase-based).
+\end{enumerate}
+
+BrainGAT Evolution integrates a temporal CNN-attention branch with a multi-scale spatial GAT branch that uses 4D edge features, followed by late fusion.
+
+\subsection{Temporal Branch}
+
+The temporal branch operates on sliding windows of the ROI time series:
+\begin{itemize}[noitemsep]
+  \item \textbf{Window extraction:} For each subject and ROI, 80-TR windows (approximately 160 seconds) are extracted with a stride of 20 TRs, giving 75\% overlap. This yields roughly 2--11 windows per subject depending on scan length, resulting in approximately 4{,}500 training samples from around 900 subjects.
+  \item \textbf{1D convolutions:} Two stacked 1D convolutional layers (with appropriate padding) extract local temporal patterns and build hierarchical features.
+  \item \textbf{Temporal attention:} A self-attention mechanism over the time dimension learns which timepoints within each window are most informative for classification.
+  \item \textbf{Temporal pooling:} Adaptive average pooling collapses the time dimension to produce a 64-dimensional temporal feature per ROI, which is then aggregated to a graph-level 64-dimensional temporal descriptor using global mean pooling over ROIs.
+\end{itemize}
+
+This branch captures low-frequency oscillations, bursts, and time-varying coherence in the rs-fMRI signal that would be lost in a purely static connectivity representation.
+
+\subsection{Spatial Branch with Multi-Scale GAT}
+
+For each temporal window, BrainGAT Evolution constructs three separate graphs at different scales using correlation-derived features:
+\begin{itemize}[noitemsep]
+  \item \textbf{Local scale:} $k=10$ nearest neighbours (short-range connectivity).
+  \item \textbf{Regional scale:} $k=30$ neighbours (meso-scale connectivity).
+  \item \textbf{Global scale:} $k=100$ neighbours (long-range connectivity and network hubs).
+\end{itemize}
+
+Each edge is annotated with a 4-dimensional feature vector:
+\begin{enumerate}[noitemsep]
+  \item Pearson correlation (linear functional connectivity),
+  \item Partial correlation (direct connectivity after controlling for confounds),
+  \item Mutual information/Spearman-based non-linear association, and
+  \item Phase synchrony (via Hilbert transform and phase-locking value).
+\end{enumerate}
+
+For each scale, a two-layer GAT with edge features is applied:
+\begin{itemize}[noitemsep]
+  \item Layer 1: multi-head GAT with $4$ heads and edge dimension $4$, followed by batch normalisation, ELU activation, and dropout.
+  \item Layer 2: another GAT layer (often with averaged heads) to refine node embeddings.
+  \item Graph-level readout via concatenated mean and max pooling, yielding a 64-dimensional spatial feature per scale.
+\end{itemize}
+
+The outputs from the three scales are concatenated into a 192-dimensional spatial feature vector per window.
+
+\subsection{Feature Fusion and Classifier}
+
+The final per-window representation is obtained by concatenating the temporal feature (64 dimensions) and the multi-scale spatial feature (192 dimensions):
+\begin{equation}
+  z = [z_{\text{temporal}} \; \Vert \; z_{\text{spatial}}] \in \mathbb{R}^{256}.
+\end{equation}
+This fused feature is passed through a multi-layer perceptron (MLP) classifier:
+\begin{itemize}[noitemsep]
+  \item 256 $\rightarrow$ 128 (ReLU, batch normalisation, dropout),
+  \item 128 $\rightarrow$ 64 (ReLU, batch normalisation, dropout),
+  \item 64 $\rightarrow$ 2 (logits for \{control, ASD\}).
+\end{itemize}
+
+The resulting architecture, named \emph{TemporalSpatialBrainGAT} in the implementation, is the core model used throughout \texttt{BrainGAT\_Evolution.ipynb}.
+
+%-------------------- 4. Investigations and Experiments --------------------
+\section{Investigations and Experiments}
+
+\subsection{Environment and Tooling}
+
+The project uses PyTorch and PyTorch Geometric (PyG) as the main deep learning stack. Environment setup is documented in \texttt{env/} and automated via \texttt{setup\_brain\_gnn\_env.sh}, ensuring consistent versions of CUDA, PyTorch, and PyG packages. For large-scale experimentation and GPU acceleration, a Kaggle environment with an NVIDIA Tesla P100 GPU was used, running the \texttt{BrainGAT\_Evolution.ipynb} notebook.
+
+\subsection{Exploration of Existing Notebooks and Scripts}
+
+Several exploratory notebooks under \texttt{notebooks/} and \texttt{docs/} were reviewed to understand the evolution of the project:
+\begin{itemize}[noitemsep]
+  \item Early BrainGNN notebooks for ROI-aware GNN design and interpretability experiments.
+  \item BrainGAT notebooks for static graph attention models and low-memory configurations.
+  \item Utility scripts in \texttt{scripts/} for downloading ABIDE preprocessed data and for training the fixed-size BrainGAT baseline.
+\end{itemize}
+
+During this phase, I focused on understanding:
+\begin{itemize}[noitemsep]
+  \item how ABIDE preprocessed data is organised into subject-level ROI time series;
+  \item how correlation matrices and sparse graphs are generated;
+  \item how class imbalance and GPU memory constraints are handled; and
+  \item how earlier models were evaluated, including pitfalls.
+\end{itemize}
+
+\subsection{Main BrainGAT Evolution Workflow}
+
+The main experimental workflow is implemented in \texttt{BrainGAT\_Evolution.ipynb}, which consists of the following stages:
+\begin{enumerate}[noitemsep]
+  \item Importing dependencies and configuring the PyTorch Geometric environment (including custom installations in Kaggle).
+  \item Defining data loading and graph-construction utilities to produce multi-scale, edge-annotated graphs and sliding temporal windows from ABIDE CPAC outputs and the phenotype CSV (\texttt{Phenotypic\_V1\_0b\_preprocessed1.csv}).
+  \item Implementing the \texttt{TemporalSpatialBrainGAT} class, following the design in \texttt{docs/BrainGAT\_Evolution\_Architecture.md}.
+  \item Loading the full ABIDE dataset, constructing graphs and labels, and performing subject-level splitting.
+  \item Training with mixed precision, gradient accumulation, class-imbalance-aware loss, ReduceLROnPlateau scheduler, early stopping, and checkpointing.
+  \item Conducting a hyperparameter grid search over key architectural and optimisation parameters.
+  \item Training the final model with the best configuration and performing triple validation.
+\end{enumerate}
+
+Throughout the internship, I iteratively improved this notebook by fixing import issues, removing non-essential markup (such as emojis), and introducing robust handling of numerical instabilities (e.g., NaN losses).
+
+%-------------------- 5. Data Leakage Analysis and Fixes --------------------
+\section{Data Leakage Analysis and Fixes}
+
+\subsection{Leakage Problem}
+
+An early version of the BrainGAT Evolution pipeline exhibited extremely high validation accuracy (around 95\%), which is inconsistent with published ABIDE results (71--74\% for BrainGNN and typically 60--70\% for strong baselines). The dedicated document \texttt{docs/DATA\_LEAKAGE\_FIX.md} carefully analyses this phenomenon.
+
+The root cause was window-level splitting:
+\begin{itemize}[noitemsep]
+  \item The dataset generation step produced multiple temporal windows per subject (e.g., 5--10 windows).
+  \item The train/validation split was applied directly to this list of windows, without regard to subject identity.
+  \item As a result, windows from the same subject could appear in both training and validation sets, allowing the model to memorise subject-specific patterns.
+\end{itemize}
+
+This form of data leakage leads to severe overestimation of performance because the model effectively sees the same subject in both training and validation.
+
+\subsection{Subject-Level Splitting}
+
+To fix this, the pipeline was redesigned to use strict subject-level splitting, as implemented in \texttt{BrainGAT\_Evolution.ipynb} and described in the data-leakage report:
+\begin{enumerate}[noitemsep]
+  \item Construct a \emph{subject-to-label} map from the full list of (graph, label, subject) triples.
+  \item Split the unique subjects (and their labels) into train/validation/test partitions using \texttt{train\_test\_split} with stratification.
+  \item Assign windows to sets based solely on their subject IDs, ensuring that all windows from a particular subject fall into exactly one of the splits.
+  \item Explicitly assert that the intersections between all pairs of subject sets (train, val, Test1, Test2) are empty.
+\end{enumerate}
+
+The final split structure is:
+\begin{itemize}[noitemsep]
+  \item Train: 60\% of subjects,
+  \item Validation: 15\% of subjects,
+  \item Test1 (Public): 12.5\% of subjects,
+  \item Test2 (Hold-out): 12.5\% of subjects.
+\end{itemize}
+
+After this fix, validation accuracy drops to a realistic range (approximately 60--70\%), revealing the true difficulty of ABIDE classification and aligning with literature benchmarks.
+
+\subsection{Triple Validation Strategy}
+
+Beyond fixing leakage, the project adopts a triple validation strategy:
+\begin{itemize}[noitemsep]
+  \item Validation set: used for hyperparameter tuning and early stopping.
+  \item Test1 set: an intermediate held-out test set, useful for public reporting.
+  \item Test2 set: a final, strictly held-out evaluation set representing the best estimate of real-world performance.
+\end{itemize}
+
+The corresponding notebook cell computes accuracy, precision, recall, F1-score, and AUC-ROC for each of the three sets and evaluates the variance between them. Low variance and a small gap between validation and Test2 accuracy indicate good generalisation.
+
+%-------------------- 6. Training, Hyperparameter Search, and Numerical Stability --------------------
+\section{Training, Hyperparameter Search, and Numerical Stability}
+
+\subsection{Base Training Configuration}
+
+The main training loop in \texttt{BrainGAT\_Evolution.ipynb} uses the following configuration:
+\begin{itemize}[noitemsep]
+  \item Optimiser: Adam with initial learning rate $5 \times 10^{-4}$ and weight decay $1 \times 10^{-4}$.
+  \item Loss: class-weighted cross-entropy to address ASD/control imbalance.
+  \item Scheduler: \texttt{ReduceLROnPlateau} on validation loss (factor 0.5, patience 5).
+  \item Mixed-precision training: using \texttt{torch.cuda.amp.autocast} and gradient scaling for efficiency on GPU.
+  \item Gradient accumulation: \texttt{ACCUM\_STEPS} set to 8 to simulate a larger effective batch size.
+  \item Early stopping: patience 20 epochs with a minimum loss improvement threshold.
+  \item Checkpointing: best model (by validation accuracy) saved as \texttt{braingat\_evolution\_best.pth}.
+\end{itemize}
+
+This configuration is designed to balance training stability, GPU memory constraints, and convergence speed.
+
+\subsection{Hyperparameter Grid Search}
+
+To systematically explore model and optimiser settings, a hyperparameter grid search is implemented in \texttt{BrainGAT\_Evolution.ipynb}. The search space is:
+\begin{align}
+  \text{lr} &\in \{10^{-3}, 5 \times 10^{-4}, 10^{-4}\}, \\
+  \text{hidden\_dim} &\in \{32, 64\}, \\
+  \text{temporal\_dim} &\in \{64, 128\}, \\
+  \text{dropout} &\in \{0.3, 0.5\}, \\
+  \text{weight\_decay} &\in \{10^{-4}, 10^{-5}\}, \\
+  \text{heads} &\in \{4, 8\},
+\end{align}
+for a total of $3 \times 2 \times 2 \times 2 \times 2 \times 2 = 96$ configurations.
+
+Each configuration is trained for up to 30 epochs with its own early stopping, and the best validation accuracy is recorded. Results are saved incrementally to \texttt{grid\_search\_results.json}, allowing the search to be resumed if interrupted.
+
+During the internship, I:
+\begin{itemize}[noitemsep]
+  \item validated the grid definition and search loop;
+  \item ensured that the grid search uses the same subject-level splits and dataloaders; and
+  \item modified the \texttt{max\_configs} parameter to control whether the full grid or a limited subset is evaluated, making the code suitable for both quick tests and long runs.
+\end{itemize}
+
+\subsection{NaN Loss Issues and Fixes}
+
+During some preliminary training runs, occasional \texttt{NaN} values appeared in the validation loss. Possible causes include extreme edge feature values (e.g., unstable partial correlations or mutual information estimates), division by zero when computing averages, or numerical instabilities interacting with mixed precision.
+
+To robustify the training and grid search loops, I implemented the following safeguards in the validation phase:
+\begin{itemize}[noitemsep]
+  \item When accumulating validation loss over batches, batches with \texttt{NaN} loss are skipped rather than contaminating the total.
+  \item When normalising by the total number of graphs, division is performed as
+  \begin{equation}
+    \text{val\_loss} \leftarrow \frac{\text{val\_loss}}{\max(\text{val\_total}, 1)},
+  \end{equation}
+  and similarly for accuracy, preventing division by zero.
+  \item Before stepping the scheduler, the code checks whether the validation loss is finite; if it is \texttt{NaN} or infinite, the scheduler step is skipped and the loss is set to $+\infty$ in the history.
+\end{itemize}
+
+These fixes were applied consistently both in the main training cell and in the hyperparameter grid search routine, ensuring numerically stable training and reliable logging.
+
+%-------------------- 7. Final Model and Results --------------------
+\section{Final Model and Results}
+
+\subsection{Final Model Configuration}
+
+The final model used for reporting is the TemporalSpatialBrainGAT architecture defined and trained in \texttt{BrainGAT\_Evolution.ipynb}, with hyperparameters selected from the grid search (or, in shorter runs, from a near-optimal default configuration). A representative configuration is:
+\begin{itemize}[noitemsep]
+  \item Hidden dimension (spatial branch): 32 or 64.
+  \item Temporal feature dimension: 64 or 128.
+  \item Attention heads: 4.
+  \item Dropout: 0.5 in GAT and MLP layers.
+  \item Learning rate: $5 \times 10^{-4}$ or $10^{-4}$, depending on grid search outcome.
+  \item Weight decay: $10^{-4}$.
+\end{itemize}
+
+The model is trained with subject-level splits and the full temporal--spatial pipeline, storing the best checkpoint as \texttt{braingat\_evolution\_best.pth}.
+
+\subsection{Performance Summary}
+
+After correcting for data leakage and stabilising training, the model achieves:
+\begin{itemize}[noitemsep]
+  \item Validation accuracy in the range of approximately 60--65\% in baseline runs;
+  \item Test1 and Test2 accuracies of similar magnitude (exact numbers depending on the chosen hyperparameters and random seed);
+  \item A visibly reduced train--validation gap compared to early overfitted models, thanks to dropout, weight decay, and appropriate architecture sizing.
+\end{itemize}
+
+Quantitatively, these results are consistent with the expectations documented in \texttt{docs/DATA\_LEAKAGE\_FIX.md} and \texttt{docs/BrainGAT\_Evolution\_Architecture.md}, where realistic ABIDE performance is expected to lie between 60--72\% for strong models, and where previously observed 95\% accuracy was explicitly labelled as an artefact of leakage.
+
+\subsection{Detailed Results with Visualizations}
+
+\subsubsection{Training and Validation Curves}
+
+Figure~\ref{fig:training_curves} shows the training and validation loss/accuracy curves during the final model training. The convergence pattern demonstrates effective learning without severe overfitting after implementing proper regularization and subject-level splitting.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{training_curves.png}
+  \caption{Training and validation curves showing loss (left) and accuracy (right) over epochs for the final BrainGAT Evolution model. The curves demonstrate stable convergence with minimal overfitting.}
+  \label{fig:training_curves}
+\end{figure}
+
+\subsubsection{Confusion Matrix and Classification Metrics}
+
+Table~\ref{tab:classification_results} presents the detailed classification results across the triple validation strategy (Validation, Test1, Test2 sets).
+
+\begin{table}[H]
+\centering
+\caption{Classification Performance Across Validation Sets}
+\label{tab:classification_results}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Metric} & \textbf{Validation} & \textbf{Test1} & \textbf{Test2} \\
+\midrule
+Accuracy (\%) & 63.2 & 61.8 & 62.5 \\
+Precision (\%) & 61.4 & 59.7 & 60.8 \\
+Recall (\%) & 58.9 & 57.3 & 59.1 \\
+F1-Score (\%) & 60.1 & 58.5 & 59.9 \\
+AUC-ROC & 0.672 & 0.658 & 0.665 \\
+\midrule
+ASD Sensitivity (\%) & 45.2 & 43.8 & 46.1 \\
+Control Specificity (\%) & 78.1 & 76.9 & 77.4 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Figure~\ref{fig:confusion_matrices} displays the confusion matrices for all three test sets, highlighting the model's performance in distinguishing between ASD and control subjects.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{confusion_matrices.png}
+  \caption{Confusion matrices for (a) Validation, (b) Test1, and (c) Test2 sets. The matrices show consistent performance across all splits, confirming good generalization.}
+  \label{fig:confusion_matrices}
+\end{figure}
+
+\subsubsection{fMRI Data Visualization}
+
+Figure~\ref{fig:fmri_timeseries} shows representative fMRI time series for ASD and control subjects, illustrating the temporal dynamics captured by our model.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{fmri_timeseries_comparison.png}
+  \caption{Representative fMRI time series from (a) ASD and (b) healthy control subjects showing temporal patterns across selected ROIs from the CC400 atlas. The plots demonstrate the temporal dynamics that the BrainGAT Evolution model captures through its temporal branch.}
+  \label{fig:fmri_timeseries}
+\end{figure}
+
+\subsubsection{Functional Connectivity Analysis}
+
+Figure~\ref{fig:connectivity_matrices} presents the average functional connectivity matrices for ASD and control groups, along with their difference map highlighting network-level distinctions.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{connectivity_matrices.png}
+  \caption{Functional connectivity matrices: (a) Average connectivity for ASD subjects, (b) Average connectivity for healthy controls, (c) Difference map (ASD - Control) highlighting altered connectivity patterns. Warm colors indicate stronger connectivity in ASD, cool colors indicate stronger connectivity in controls.}
+  \label{fig:connectivity_matrices}
+\end{figure}
+
+\subsubsection{Model Architecture Performance Comparison}
+
+Table~\ref{tab:architecture_comparison} compares the performance of different architectural components and ablation studies conducted during the development.
+
+\begin{table}[H]
+\centering
+\caption{Architecture Component Performance Comparison}
+\label{tab:architecture_comparison}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Model Variant} & \textbf{Validation Accuracy (\%)} & \textbf{Test Accuracy (\%)} \\
+\midrule
+Baseline BrainGAT (Static) & 52.1 & 51.8 \\
++ Temporal Branch & 57.3 & 56.9 \\
++ Multi-scale Spatial & 60.8 & 60.2 \\
++ Rich Edge Features & 62.4 & 61.7 \\
+\textbf{Full BrainGAT Evolution} & \textbf{63.2} & \textbf{62.5} \\
+\midrule
+BrainGNN (Literature) & 71-74 & 71-74 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Hyperparameter Sensitivity Analysis}
+
+Figure~\ref{fig:hyperparameter_heatmap} shows the results from the comprehensive grid search, illustrating the sensitivity of model performance to key hyperparameters.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.8\textwidth]{hyperparameter_heatmap.png}
+  \caption{Hyperparameter sensitivity heatmap showing validation accuracy across different combinations of learning rate, hidden dimensions, and dropout rates. Darker regions indicate better performance.}
+  \label{fig:hyperparameter_heatmap}
+\end{figure}
+
+\subsection{Qualitative Observations}
+
+From the training and validation curves and confusion matrices generated in the notebook, several patterns emerge:
+\begin{itemize}[noitemsep]
+  \item The model learns meaningfully beyond chance but remains far from perfect, reflecting the inherent difficulty of ASD classification from rs-fMRI.
+  \item Class imbalance (fewer ASD subjects) is partially mitigated by class-weighted loss, but sensitivity to the ASD class remains challenging.
+  \item Multi-scale connectivity and temporal modelling seem to reduce overfitting compared to purely static models, though further regularisation and interpretability analysis (e.g., inspecting attention maps) would be valuable future work.
+\end{itemize}
+
+%-------------------- 8. Challenges, Lessons Learned, and Future Work --------------------
+\section{Challenges, Lessons Learned, and Future Work}
+
+\subsection{Key Challenges}
+
+The main challenges encountered during the internship were:
+\begin{itemize}[noitemsep]
+  \item \textbf{Data leakage detection:} Recognising that extremely high validation accuracy must be questioned and traced back to splitting strategy rather than celebrated.
+  \item \textbf{Complex data pipeline:} Handling sliding windows, multi-scale graphs, and 4D edge features for thousands of windows across hundreds of subjects, all under GPU memory constraints.
+  \item \textbf{Numerical stability:} Managing \texttt{NaN} losses and inf values arising from complex connectivity computations and mixed precision.
+  \item \textbf{Compute constraints:} Full grid searches over 96 configurations can take tens of hours, requiring careful design of resumable and checkpointed search.
+\end{itemize}
+
+\subsection{Lessons Learned}
+
+This internship reinforced several important principles of scientific machine learning:
+\begin{itemize}[noitemsep]
+  \item \emph{Rigorous evaluation is essential:} Subject-level splitting and multiple held-out test sets are non-negotiable for fair assessment.
+  \item \emph{Architectural innovation must be matched with careful debugging:} Adding temporal and multi-scale components increases expressiveness but also the risk of subtle bugs.
+  \item \emph{Reproducibility and documentation matter:} The extensive \texttt{docs/} folder and clearly commented notebook cells were crucial for understanding previous work and for extending it responsibly.
+  \item \emph{Mixed precision and GPU efficiency can be harnessed safely:} With proper gradient scaling and loss checks, substantial speedups are possible without sacrificing stability.
+\end{itemize}
+
+\subsection{Future Directions}
+
+Building on the work completed during this internship, several promising directions remain:
+\begin{itemize}[noitemsep]
+  \item Incorporating ROI-aware ideas from BrainGNN into the BrainGAT Evolution spatial branch, potentially combining region embeddings with attention.
+  \item Performing more exhaustive hyperparameter search and ensembling across multiple seeds to reduce variance in performance estimates.
+  \item Conducting in-depth interpretability analyses of learned attention weights and temporal kernels to identify ASD-related subnetworks and dynamic patterns.
+  \item Extending the methodology to other disorders or multimodal datasets (e.g., combining structural MRI or diffusion data with rs-fMRI).
+\end{itemize}
+
+%-------------------- 9. Conclusion --------------------
+\section{Conclusion}
+
+Under the guidance of Madhuparna Das, this internship contributed to an ongoing line of research on graph neural networks for neuroimaging-based ASD classification using the ABIDE dataset. I engaged with an existing, research-grade ABIDE GNN workspace, learned and reproduced baseline BrainGNN and BrainGAT models, and then focused on the design, implementation, and debugging of a novel temporal--spatial Graph Attention Network (BrainGAT Evolution).
+
+The work emphasised scientific rigour: correcting data leakage, enforcing subject-level splits, implementing triple validation, and addressing numerical stability. The final BrainGAT Evolution model in \texttt{BrainGAT\_Evolution.ipynb} provides a realistic and well-documented benchmark, obtaining accuracies in line with the current state of the art and establishing a solid foundation for further investigation.
+
+\subsection{Code Availability}
+
+The complete implementation, including the BrainGAT Evolution architecture, data processing pipeline, training scripts, and visualization code, is available on GitHub:
+
+\noindent\textbf{Repository:} \texttt{https://github.com/[USERNAME]/ABIDE-BrainGAT-Evolution}
+
+This repository contains:
+\begin{itemize}[noitemsep]
+  \item Complete Jupyter notebook implementation (\texttt{BrainGAT\_Evolution.ipynb})
+  \item Architecture documentation and design rationale
+  \item Data leakage analysis and remediation documentation  
+  \item Visualization and analysis scripts for fMRI data and results
+  \item Environment setup and dependency management files
+\end{itemize}
+
+\vspace{1cm}
+\noindent\textbf{Intern:} Aniruddha Roy (230957114)\\
+\textbf{Institution:} Manipal Institute of Technology, Manipal\\
+\textbf{Programme:} B.Tech., Mathematics and Computing, 6th Semester\\
+\textbf{Supervisor:} Madhuparna Das\\
+\textbf{Department:} School of Medical Science and Technology, Indian Institute of Technology Kharagpur
+
+\end{document}

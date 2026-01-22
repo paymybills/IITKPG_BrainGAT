@@ -1,0 +1,27 @@
+# Core packages for CUDA Brain GNN environment
+# Install with: pip install -r requirements_core.txt
+
+# PyTorch with CUDA 12.1
+--index-url https://download.pytorch.org/whl/cu121
+torch==2.5.1+cu121
+torchvision==0.20.1+cu121
+
+# PyTorch Geometric
+torch-geometric==2.6.1
+
+# Data Science
+numpy==2.1.2
+pandas==2.3.2
+scipy==1.16.2
+scikit-learn==1.7.2
+matplotlib==3.10.6
+seaborn==0.13.2
+networkx==3.3
+
+# Jupyter
+jupyter
+ipykernel
+
+# Utilities
+tqdm
+requests

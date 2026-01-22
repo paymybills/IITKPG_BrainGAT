@@ -1,0 +1,11 @@
+{
+  "lr": 0.0005,
+  "hidden_dim": 32,
+  "temporal_dim": 64,
+  "dropout": 0.5,
+  "weight_decay": 0.0001,
+  "heads": 4,
+  "label_smoothing": 0.1,
+  "window_length": 80,
+  "stride": 40
+}

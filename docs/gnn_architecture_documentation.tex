@@ -1,0 +1,344 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{subcaption}
+
+\geometry{margin=1in}
+\pgfplotsset{compat=1.17}
+
+% Code listing settings
+\lstset{
+    backgroundcolor=\color{gray!10},
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{red},
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny
+}
+
+\title{Graph Neural Networks for Autism Spectrum Disorder Classification:\\
+Novel Multi-Scale Brain Connectivity Analysis}
+
+\author{Your Name}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+
+This document presents a comprehensive analysis of Graph Neural Network (GNN) architectures designed for classifying Autism Spectrum Disorder (ASD) using functional Magnetic Resonance Imaging (fMRI) data from the ABIDE (Autism Brain Imaging Data Exchange) dataset. The approach introduces novel multi-scale connectivity learning and hierarchical brain network analysis.
+
+\section{Problem Statement}
+
+\subsection{Objective}
+Develop a GNN-based classifier to distinguish between neurotypical controls and individuals with ASD using brain connectivity patterns derived from resting-state fMRI data.
+
+\subsection{Dataset}
+\begin{itemize}
+    \item \textbf{Source}: ABIDE Preprocessed Dataset
+    \item \textbf{ROI Atlas}: CC400 (400 brain regions)
+    \item \textbf{Preprocessing}: CPAC pipeline, no filtering, no global signal regression
+    \item \textbf{Data Format}: Time series data for each of 400 brain regions
+\end{itemize}
+
+\section{Data Preprocessing and Graph Construction}
+
+\subsection{Graph Creation Pipeline}
+
+\begin{algorithm}
+\caption{Brain Connectivity Graph Construction}
+\begin{algorithmic}[1]
+\Procedure{CreateBrainGraph}{$time\_series$, $threshold$}
+    \State $C \leftarrow \text{corrcoef}(time\_series^T)$ \Comment{Correlation matrix}
+    \State $C \leftarrow \text{nan\_to\_num}(C, 0)$ \Comment{Handle NaN values}
+    \State $A \leftarrow (|C| > threshold)$ \Comment{Adjacency matrix}
+    \State $A_{ii} \leftarrow 0$ \Comment{Remove self-loops}
+    \State $edge\_index \leftarrow \text{indices}(A)$ \Comment{Edge connectivity}
+    \State $X \leftarrow [\mu(time\_series), \sigma(time\_series), \sum A]^T$ \Comment{Node features}
+    \State $edge\_attr \leftarrow [C_{ij} \text{ for } (i,j) \in edge\_index]$ \Comment{Edge weights}
+    \State \Return $\text{Graph}(X, edge\_index, edge\_attr)$
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Node Features}
+Each brain region (node) is characterized by:
+\begin{align}
+x_i &= [\mu_i, \sigma_i, d_i]^T \\
+\text{where } \mu_i &= \frac{1}{T}\sum_{t=1}^T s_i(t) \quad \text{(temporal mean)} \\
+\sigma_i &= \sqrt{\frac{1}{T-1}\sum_{t=1}^T (s_i(t) - \mu_i)^2} \quad \text{(temporal std)} \\
+d_i &= \sum_{j=1}^N A_{ij} \quad \text{(node degree)}
+\end{align}
+
+\subsection{Edge Features}
+Edges represent functional connectivity strength:
+\begin{equation}
+e_{ij} = \text{corr}(s_i, s_j) = \frac{\sum_{t=1}^T (s_i(t) - \mu_i)(s_j(t) - \mu_j)}{\sqrt{\sum_{t=1}^T (s_i(t) - \mu_i)^2 \sum_{t=1}^T (s_j(t) - \mu_j)^2}}
+\end{equation}
+
+\section{Model Architectures}
+
+\subsection{BrainConnectivityGNN}
+
+\subsubsection{Architecture Overview}
+The BrainConnectivityGNN implements a novel multi-scale approach to learning brain connectivity patterns through four key innovations:
+
+\begin{enumerate}
+    \item \textbf{Multi-Scale Feature Extraction}: Parallel local and global connectivity learning
+    \item \textbf{Attention Mechanism}: Focus on discriminative brain regions
+    \item \textbf{Residual Connections}: Enable deep learning while preserving information
+    \item \textbf{Adaptive Pooling}: Combine mean and max pooling for robust representations
+\end{enumerate}
+
+\subsubsection{Mathematical Formulation}
+
+\paragraph{Local Connectivity Path:}
+\begin{align}
+H_1^{(l)} &= \text{ReLU}(\text{BN}(\text{GraphConv}(X, A, E))) \\
+H_2^{(l)} &= \text{ReLU}(\text{BN}(\text{GraphConv}(H_1^{(l)}, A, E)))
+\end{align}
+
+\paragraph{Global Connectivity Path:}
+\begin{align}
+H_1^{(g)} &= \text{ReLU}(\text{GraphConv}(X, A, E)) \\
+H_2^{(g)} &= \text{ReLU}(\text{GraphConv}(H_1^{(g)}, A, E))
+\end{align}
+
+\paragraph{Feature Fusion and Attention:}
+\begin{align}
+H_{combined} &= \text{ReLU}(\text{BN}([H_2^{(l)} \parallel H_2^{(g)}])) \\
+H_{att} &= \text{ReLU}(\text{GAT}(H_{combined}, A, E)) \\
+H_{res} &= \text{ReLU}(\text{BN}(\text{GraphConv}(H_{combined}, A, E))) \\
+H_{final} &= H_{att} + H_{res}
+\end{align}
+
+\paragraph{Graph-Level Representation:}
+\begin{align}
+g_{mean} &= \frac{1}{|V|}\sum_{i \in V} H_{final}^{(i)} \\
+g_{max} &= \max_{i \in V} H_{final}^{(i)} \\
+g &= [g_{mean} \parallel g_{max}]
+\end{align}
+
+\paragraph{Classification:}
+\begin{align}
+\hat{y} &= \text{Classifier}(g) \\
+&= \text{Linear}(\text{Dropout}(\text{ReLU}(\text{Linear}(g))))
+\end{align}
+
+\subsection{HierarchicalBrainGNN}
+
+\subsubsection{Hierarchical Learning Approach}
+The HierarchicalBrainGNN processes brain connectivity at three distinct levels:
+
+\begin{enumerate}
+    \item \textbf{ROI Level}: Individual region processing
+    \item \textbf{Network Level}: Attention-based network integration  
+    \item \textbf{Whole-Brain Level}: Global brain pattern learning
+\end{enumerate}
+
+\subsubsection{Mathematical Formulation}
+
+\paragraph{Level 1 - ROI Processing:}
+\begin{align}
+H_{roi}^{(1)} &= \text{ReLU}(\text{GraphConv}(X, A, E)) \\
+H_{roi}^{(2)} &= \text{ReLU}(\text{GraphConv}(\text{Dropout}(H_{roi}^{(1)}), A, E))
+\end{align}
+
+\paragraph{Level 2 - Network Attention:}
+\begin{equation}
+H_{net} = \text{ReLU}(\text{GAT}(H_{roi}^{(2)}, A, E))
+\end{equation}
+
+\paragraph{Level 3 - Whole-Brain Integration:}
+\begin{equation}
+H_{brain} = \text{ReLU}(\text{GraphConv}(H_{net}, A, E))
+\end{equation}
+
+\paragraph{Final Representation:}
+\begin{equation}
+g = \text{GlobalMeanPool}(H_{brain}) \rightarrow \hat{y} = \text{Classifier}(g)
+\end{equation}
+
+\section{Training Strategy}
+
+\subsection{Hyperparameters}
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Learning Rate & 0.001 (Fixed), 0.0001 (Original) \\
+Batch Size & 8 (Fixed), 2 (Original) \\
+Accumulation Steps & 4 (Fixed), 8 (Original) \\
+Effective Batch Size & 32 (Fixed), 16 (Original) \\
+Weight Decay & $1 \times 10^{-4}$ \\
+Hidden Dimensions & 32 \\
+Gradient Clipping & 1.0 \\
+Dropout Rates & 0.5, 0.3, 0.4 \\
+\bottomrule
+\end{tabular}
+\caption{Training Hyperparameters}
+\end{table}
+
+\subsection{Loss Function}
+Binary Cross-Entropy with Logits:
+\begin{equation}
+\mathcal{L} = -\frac{1}{N}\sum_{i=1}^N [y_i \log(\sigma(\hat{y}_i)) + (1-y_i)\log(1-\sigma(\hat{y}_i))]
+\end{equation}
+
+\subsection{Optimization Enhancements}
+\begin{itemize}
+    \item \textbf{Gradient Accumulation}: Simulate larger batch sizes
+    \item \textbf{Gradient Clipping}: Prevent exploding gradients
+    \item \textbf{Early Stopping}: Prevent overfitting (patience = 10)
+    \item \textbf{Learning Rate Scheduling}: ReduceLROnPlateau
+\end{itemize}
+
+\section{Experimental Setup}
+
+\subsection{Data Splits}
+\begin{itemize}
+    \item \textbf{Training}: 70\% (stratified)
+    \item \textbf{Validation}: 15\% (stratified)
+    \item \textbf{Testing}: 15\% (stratified)
+\end{itemize}
+
+\subsection{Performance Metrics}
+\begin{itemize}
+    \item \textbf{Accuracy}: Primary classification metric
+    \item \textbf{Loss}: Training convergence indicator
+    \item \textbf{Validation Performance}: Overfitting prevention
+\end{itemize}
+
+\section{Key Technical Innovations}
+
+\subsection{Multi-Scale Connectivity Learning}
+Traditional GNN approaches process brain connectivity at a single scale. Our approach introduces parallel pathways for local and global connectivity patterns, enabling the model to capture both fine-grained regional interactions and broad network-level communications.
+
+\subsection{Edge-Weighted Graph Convolutions}
+Unlike standard GNNs that use binary adjacency matrices, our models utilize correlation strengths as edge weights, preserving the continuous nature of brain connectivity.
+
+\subsection{Attention-Based Region Selection}
+The Graph Attention Network (GAT) component enables the model to automatically identify and focus on brain regions most relevant for ASD classification.
+
+\subsection{Hierarchical Processing}
+The HierarchicalBrainGNN mirrors the natural organization of brain networks, processing information from individual regions to network clusters to whole-brain patterns.
+
+\section{Implementation Details}
+
+\subsection{Software Framework}
+\begin{itemize}
+    \item \textbf{PyTorch}: Deep learning framework
+    \item \textbf{PyTorch Geometric}: Graph neural network library
+    \item \textbf{NumPy/Pandas}: Data processing
+    \item \textbf{Scikit-learn}: Data splitting and metrics
+\end{itemize}
+
+\subsection{Hardware Requirements}
+\begin{itemize}
+    \item \textbf{GPU}: CUDA-compatible for acceleration
+    \item \textbf{Memory}: Sufficient for graph batching
+    \item \textbf{Storage}: ABIDE dataset (~10GB)
+\end{itemize}
+
+\section{Troubleshooting and Fixes}
+
+\subsection{Common Issues Identified}
+
+\subsubsection{Problem: Model Not Learning (Accuracy ≈ 50\%)}
+\begin{itemize}
+    \item \textbf{Cause}: Learning rate too low (0.0001)
+    \item \textbf{Fix}: Increased to 0.001
+\end{itemize}
+
+\subsubsection{Problem: Noisy Gradients}
+\begin{itemize}
+    \item \textbf{Cause}: Batch size too small (2)
+    \item \textbf{Fix}: Increased to 8 with accumulation
+\end{itemize}
+
+\subsubsection{Problem: Overfitting}
+\begin{itemize}
+    \item \textbf{Cause}: No early stopping mechanism
+    \item \textbf{Fix}: Added patience-based early stopping
+\end{itemize}
+
+\subsection{Performance Optimization Strategy}
+\begin{enumerate}
+    \item Increase effective batch size through accumulation
+    \item Implement learning rate scheduling
+    \item Add comprehensive monitoring
+    \item Use model checkpointing for best validation performance
+\end{enumerate}
+
+\section{Expected Results}
+
+\subsection{Performance Targets}
+\begin{itemize}
+    \item \textbf{Baseline Accuracy}: > 60\% (better than random)
+    \item \textbf{Target Accuracy}: > 70\% (clinically relevant)
+    \item \textbf{Convergence}: Within 50 epochs with early stopping
+\end{itemize}
+
+\subsection{Comparative Analysis}
+The fixed model should demonstrate:
+\begin{itemize}
+    \item Faster convergence
+    \item Higher final accuracy
+    \item More stable training dynamics
+    \item Better generalization to test data
+\end{itemize}
+
+\section{Future Directions}
+
+\subsection{Model Enhancements}
+\begin{itemize}
+    \item \textbf{Graph Transformer}: Self-attention mechanisms
+    \item \textbf{Multi-Modal Integration}: Structural + functional data
+    \item \textbf{Interpretability}: Attention visualization and analysis
+\end{itemize}
+
+\subsection{Clinical Applications}
+\begin{itemize}
+    \item \textbf{Biomarker Discovery}: Identify ASD-specific connectivity patterns
+    \item \textbf{Subtype Classification}: Different ASD presentations
+    \item \textbf{Treatment Response Prediction}: Personalized medicine
+\end{itemize}
+
+\section{Conclusion}
+
+This work presents novel GNN architectures specifically designed for brain connectivity analysis in ASD classification. The multi-scale approach and hierarchical processing enable comprehensive learning of brain network patterns, while the technical fixes address common training challenges in neuroimaging applications.
+
+The combination of domain-specific architectural innovations and robust training procedures provides a strong foundation for advancing machine learning applications in computational neuroscience and clinical neuroimaging.
+
+\section*{References}
+
+\begin{enumerate}
+    \item Di Martino, A., et al. (2014). The autism brain imaging data exchange: towards a large-scale evaluation of the intrinsic brain architecture in autism. Molecular psychiatry, 19(6), 659-667.
+    \item Kipf, T. N., \& Welling, M. (2016). Semi-supervised classification with graph convolutional networks. arXiv preprint arXiv:1609.02907.
+    \item Veličković, P., et al. (2017). Graph attention networks. arXiv preprint arXiv:1710.10903.
+    \item Craddock, R. C., et al. (2013). A whole brain fMRI atlas generated via spatially constrained spectral clustering. Human brain mapping, 34(8), 1914-1928.
+\end{enumerate}
+
+\end{document}
