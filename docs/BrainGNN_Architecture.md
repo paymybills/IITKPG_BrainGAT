@@ -360,49 +360,49 @@ def mean_max_readout(x, batch):
 ```
 Input: Graph with N=392 nodes, D=392 features
     ↓
-
- ROI-Aware Conv Layer 1                          
-   - Input: 392-dim features                     
-   - GCN: Message passing with edge weights      
-   - ROI Embeddings: Learn region identities     
-   - Output: 128-dim features per node           
-   - BatchNorm + ReLU + Dropout(0.3)            
-
+┌─────────────────────────────────────────────────┐
+│ ROI-Aware Conv Layer 1                          │
+│   - Input: 392-dim features                     │
+│   - GCN: Message passing with edge weights      │
+│   - ROI Embeddings: Learn region identities     │
+│   - Output: 128-dim features per node           │
+│   - BatchNorm + ReLU + Dropout(0.3)            │
+└─────────────────────────────────────────────────┘
     ↓ (392 nodes, 128-dim each)
-
- TopK Pooling Layer 1 (ratio=0.5)               
-   - Learn importance scores for each node       
-   - Select top 50% most important ROIs          
-   - Update edge connectivity                     
-
+┌─────────────────────────────────────────────────┐
+│ TopK Pooling Layer 1 (ratio=0.5)               │
+│   - Learn importance scores for each node       │
+│   - Select top 50% most important ROIs          │
+│   - Update edge connectivity                     │
+└─────────────────────────────────────────────────┘
     ↓ (196 nodes, 128-dim each)
-
- ROI-Aware Conv Layer 2                          
-   - Input: 128-dim features                     
-   - Second level of feature abstraction         
-   - Output: 128-dim features per node           
-   - BatchNorm + ReLU + Dropout(0.3)            
-
+┌─────────────────────────────────────────────────┐
+│ ROI-Aware Conv Layer 2                          │
+│   - Input: 128-dim features                     │
+│   - Second level of feature abstraction         │
+│   - Output: 128-dim features per node           │
+│   - BatchNorm + ReLU + Dropout(0.3)            │
+└─────────────────────────────────────────────────┘
     ↓ (196 nodes, 128-dim each)
-
- TopK Pooling Layer 2 (ratio=0.5)               
-   - Further refinement of important regions     
-   - Select top 50% of remaining nodes           
-
+┌─────────────────────────────────────────────────┐
+│ TopK Pooling Layer 2 (ratio=0.5)               │
+│   - Further refinement of important regions     │
+│   - Select top 50% of remaining nodes           │
+└─────────────────────────────────────────────────┘
     ↓ (98 nodes, 128-dim each)
-
- Graph-Level Readout                             
-   - Mean Pooling: Average features (128-dim)    
-   - Max Pooling: Peak features (128-dim)        
-   - Concatenate: [mean || max] (256-dim)        
-
+┌─────────────────────────────────────────────────┐
+│ Graph-Level Readout                             │
+│   - Mean Pooling: Average features (128-dim)    │
+│   - Max Pooling: Peak features (128-dim)        │
+│   - Concatenate: [mean || max] (256-dim)        │
+└─────────────────────────────────────────────────┘
     ↓ (256-dim graph embedding)
-
- MLP Classifier                                  
-   - Linear: 256 → 64                            
-   - ReLU + Dropout(0.5)                         
-   - Linear: 64 → 2 (Control vs ASD)            
-
+┌─────────────────────────────────────────────────┐
+│ MLP Classifier                                  │
+│   - Linear: 256 → 64                            │
+│   - ReLU + Dropout(0.5)                         │
+│   - Linear: 64 → 2 (Control vs ASD)            │
+└─────────────────────────────────────────────────┘
     ↓
 Output: [logit_control, logit_ASD] → Softmax → Probabilities
 ```

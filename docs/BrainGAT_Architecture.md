@@ -147,43 +147,43 @@ GATConv(
 ```
 Input Graph: N=392 nodes, ~7,840 edges, features: 392-dim
     ↓
-
- Layer 1: Multi-Head GAT                         
-   - Input: 392-dim → Output: 256-dim × 8 heads 
-   - Attention learns important connections      
-   - Batch Norm + ELU + Dropout(0.3)            
-
+┌─────────────────────────────────────────────────┐
+│ Layer 1: Multi-Head GAT                         │
+│   - Input: 392-dim → Output: 256-dim × 8 heads │
+│   - Attention learns important connections      │
+│   - Batch Norm + ELU + Dropout(0.3)            │
+└─────────────────────────────────────────────────┘
     ↓ (2048-dim: 256 × 8 concatenated)
-
- Layer 2: Multi-Head GAT                         
-   - Input: 2048-dim → Output: 256-dim × 8 heads
-   - Higher-order connectivity patterns          
-   - Batch Norm + ELU + Dropout(0.3)            
-
+┌─────────────────────────────────────────────────┐
+│ Layer 2: Multi-Head GAT                         │
+│   - Input: 2048-dim → Output: 256-dim × 8 heads│
+│   - Higher-order connectivity patterns          │
+│   - Batch Norm + ELU + Dropout(0.3)            │
+└─────────────────────────────────────────────────┘
     ↓ (2048-dim)
-
- Layer 3: Multi-Head GAT (Average)               
-   - Input: 2048-dim → Output: 256-dim          
-   - Average attention heads (not concatenate)   
-   - Global integration features                 
-   - Batch Norm + ELU + Dropout(0.3)            
-
+┌─────────────────────────────────────────────────┐
+│ Layer 3: Multi-Head GAT (Average)               │
+│   - Input: 2048-dim → Output: 256-dim          │
+│   - Average attention heads (not concatenate)   │
+│   - Global integration features                 │
+│   - Batch Norm + ELU + Dropout(0.3)            │
+└─────────────────────────────────────────────────┘
     ↓ (256-dim per node)
-
- Graph-Level Readout                             
-   - Mean Pooling: g_mean = mean(x_i)           
-   - Max Pooling: g_max = max(x_i)              
-   - Concatenate: g = [g_mean || g_max]         
-
+┌─────────────────────────────────────────────────┐
+│ Graph-Level Readout                             │
+│   - Mean Pooling: g_mean = mean(x_i)           │
+│   - Max Pooling: g_max = max(x_i)              │
+│   - Concatenate: g = [g_mean || g_max]         │
+└─────────────────────────────────────────────────┘
     ↓ (512-dim: 256 mean + 256 max)
-
- MLP Classifier                                  
-   - Linear: 512 → 256                           
-   - BatchNorm + ReLU + Dropout(0.5)            
-   - Linear: 256 → 128                           
-   - BatchNorm + ReLU + Dropout(0.5)            
-   - Linear: 128 → 2 (Control vs ASD)           
-
+┌─────────────────────────────────────────────────┐
+│ MLP Classifier                                  │
+│   - Linear: 512 → 256                           │
+│   - BatchNorm + ReLU + Dropout(0.5)            │
+│   - Linear: 256 → 128                           │
+│   - BatchNorm + ReLU + Dropout(0.5)            │
+│   - Linear: 128 → 2 (Control vs ASD)           │
+└─────────────────────────────────────────────────┘
     ↓
 Output: Logits [batch_size, 2] → Softmax → Probabilities
 ```

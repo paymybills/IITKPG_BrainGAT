@@ -32,7 +32,7 @@
 ```
 Input: fMRI Timeseries Windows (80 TRs × 392 ROIs)
          |
-         
+         ├─────────────────┬──────────────────┐
          ↓                 ↓                  ↓
    TEMPORAL BRANCH   SPATIAL BRANCH   EDGE FEATURES
          |                 |                  |
@@ -42,7 +42,7 @@ Input: fMRI Timeseries Windows (80 TRs × 392 ROIs)
          |           (k=10,30,100)      Phase Sync
    Pool (64→1)       Mean+Max Pool          |
          |                 |                  |
-         
+         └─────────────────┴──────────────────┘
                            ↓
                    Concatenate Features
                     (64 + 192 = 256)
