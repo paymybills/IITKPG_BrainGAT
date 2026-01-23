@@ -4,7 +4,7 @@
 
 ---
 
-## 📋 Overview
+##  Overview
 
 BrainGNN is a specialized Graph Neural Network designed for brain disorder classification using functional connectivity graphs. This implementation is **scientifically rigorous** with strict anti-leakage measures.
 
@@ -17,7 +17,7 @@ BrainGNN is a specialized Graph Neural Network designed for brain disorder class
 
 ---
 
-## 🧠 Architecture Philosophy
+##  Architecture Philosophy
 
 ### The BrainGNN Approach
 
@@ -31,7 +31,7 @@ Traditional Graph Neural Networks treat all nodes identically. BrainGNN recogniz
 
 ---
 
-## 🏗️ Architecture Components
+##  Architecture Components
 
 ### 1. Input: Graph Representation
 
@@ -250,7 +250,7 @@ class ROIAwareConv(nn.Module):
 
 ---
 
-## 🎯 ROI-Selection Pooling (TopK)
+##  ROI-Selection Pooling (TopK)
 
 ### Motivation
 
@@ -480,7 +480,7 @@ For default configuration (N=392, hidden=128, roi_dim=32):
 
 ---
 
-## 🎓 Training Strategy
+##  Training Strategy
 
 ### Loss Function
 
@@ -556,7 +556,7 @@ else:
 
 ---
 
-## 🛡️ Anti-Leakage Measures
+##  Anti-Leakage Measures
 
 ### Critical for Scientific Validity!
 
@@ -564,7 +564,7 @@ else:
 
 ### 1. Subject-Level Splitting
 
-**✅ CORRECT**:
+** CORRECT**:
 ```python
 # Split subjects first, then create graphs
 train_subjects, test_subjects = train_test_split(
@@ -574,7 +574,7 @@ train_graphs = [graphs[i] for i in train_subjects]
 test_graphs = [graphs[i] for i in test_subjects]
 ```
 
-**❌ WRONG**:
+** WRONG**:
 ```python
 # DON'T split graphs directly if same subject appears multiple times
 train_graphs, test_graphs = train_test_split(all_graphs)
@@ -600,7 +600,7 @@ train_val_graphs, test_graphs, train_val_labels, test_labels = train_test_split(
 
 ### 3. No Cross-Split Normalization
 
-**❌ WRONG**:
+** WRONG**:
 ```python
 # Global normalization leaks test set statistics!
 all_data = np.concatenate([train_data, val_data, test_data])
@@ -608,7 +608,7 @@ mean, std = all_data.mean(), all_data.std()
 train_norm = (train_data - mean) / std  # Uses test set info!
 ```
 
-**✅ CORRECT**:
+** CORRECT**:
 ```python
 # Normalize each split independently
 train_mean, train_std = train_data.mean(), train_data.std()
@@ -624,14 +624,14 @@ val_norm = (val_data - val_data.mean()) / val_data.std()  # Option 2: independen
 
 ### 4. Validation-Guided Model Selection
 
-**✅ CORRECT**:
+** CORRECT**:
 ```python
 # Use validation set to pick best model
 if val_acc > best_val_acc:
     save_model()  # Save based on validation performance
 ```
 
-**❌ WRONG**:
+** WRONG**:
 ```python
 # DON'T use test set for model selection
 if test_acc > best_test_acc:  # Peeking at test set!
@@ -654,7 +654,7 @@ test_results = evaluate(model, test_loader)  # Final unbiased estimate
 
 ### 6. No Phenotypic Features as Input
 
-**✅ Our Implementation**:
+** Our Implementation**:
 - Node features: Correlation vectors (from fMRI)
 - Edge weights: Correlation values (from fMRI)
 - **NO age, sex, IQ, site, ethnicity, handedness, etc.**
@@ -681,7 +681,7 @@ For ABIDE ASD classification (imaging only, proper splits):
 | **65-70%** | **Good performance** ✓✓ |
 | **70-75%** | **Excellent performance** ✓✓✓ |
 | 75-80% | Exceptional (rare for imaging only) |
-| >80% | **⚠️ Suspicious - check for leakage!** |
+| >80% | ** Suspicious - check for leakage!** |
 
 ### Why Not 90%+ Accuracy?
 
@@ -848,7 +848,7 @@ graphs_cc400 = load_abide_graphs(data_dir_cc400, topk=25)
 
 ---
 
-## 📈 Training Workflow
+##  Training Workflow
 
 ### Complete Pipeline
 
@@ -911,7 +911,7 @@ Gap:       1%     5%    18%    29%  (overfitting!)
 
 ---
 
-## 🔬 Interpreting Results
+##  Interpreting Results
 
 ### Confusion Matrix Analysis
 
@@ -965,7 +965,7 @@ Accuracy: 65%  (Misleading! Poor ASD detection)
 
 ---
 
-## 🎯 Dataset Understanding
+##  Dataset Understanding
 
 ### Why 351 Subjects?
 
@@ -1012,7 +1012,7 @@ ls /home/moew/Documents/ABIDE/abide_data/Outputs/cpac/nofilt_noglobal/
 
 ---
 
-## 📚 Mathematical Summary
+##  Mathematical Summary
 
 ### Complete Forward Pass
 
@@ -1074,7 +1074,7 @@ $$
 
 ---
 
-## ✅ Best Practices Checklist
+##  Best Practices Checklist
 
 ### Before Training
 
@@ -1111,12 +1111,11 @@ BrainGNN demonstrates that **interpretable, scientifically rigorous ASD classifi
 
 ### Key Strengths
 
-✅ **Pure imaging approach**: No demographic shortcuts  
-✅ **ROI-aware architecture**: Learns region-specific patterns  
-✅ **Hierarchical pooling**: Automatic feature selection  
-✅ **Rigorous data splitting**: No leakage, unbiased evaluation  
-✅ **Interpretable**: Can identify which ROIs matter most  
-
+ **Pure imaging approach**: No demographic shortcuts  
+ **ROI-aware architecture**: Learns region-specific patterns  
+ **Hierarchical pooling**: Automatic feature selection  
+ **Rigorous data splitting**: No leakage, unbiased evaluation  
+ **Interpretable**: Can identify which ROIs matter most  
 ### Realistic Expectations
 
 - **60-70% accuracy**: Good performance for imaging only
