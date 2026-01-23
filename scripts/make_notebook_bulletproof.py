@@ -10,10 +10,10 @@ import subprocess
 import importlib
 
 def install_dependencies():
-    print("📦 Installing torch-geometric and dependencies...")
+    print(" Installing torch-geometric and dependencies...")
     # Use sys.executable to ensure we install to the current python environment
     subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "torch-geometric", "torch-scatter", "torch-sparse"])
-    print("✅ Dependencies installed.")
+    print(" Dependencies installed.")
     # Invalidate caches to find the new modules
     importlib.invalidate_caches()
 
