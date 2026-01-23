@@ -32,7 +32,7 @@
 ```
 Input: fMRI Timeseries Windows (80 TRs × 392 ROIs)
          |
-         ├─────────────────┬──────────────────┐
+         
          ↓                 ↓                  ↓
    TEMPORAL BRANCH   SPATIAL BRANCH   EDGE FEATURES
          |                 |                  |
@@ -42,7 +42,7 @@ Input: fMRI Timeseries Windows (80 TRs × 392 ROIs)
          |           (k=10,30,100)      Phase Sync
    Pool (64→1)       Mean+Max Pool          |
          |                 |                  |
-         └─────────────────┴──────────────────┘
+         
                            ↓
                    Concatenate Features
                     (64 + 192 = 256)
@@ -603,12 +603,12 @@ Applied during data loading:
 ### BrainGAT Evolution
 
 **Architecture Improvements**:
-- ✅ Sliding windows (80 TRs, 75% overlap)
-- ✅ Temporal branch (1D CNN + attention)
-- ✅ 4D edge features (Pearson, Partial, MI, Phase)
-- ✅ Multi-scale GAT (k=10, 30, 100)
-- ✅ Dual-stream fusion (temporal + spatial)
-- ✅ Full dataset (~900 subjects vs. 351)
+-  Sliding windows (80 TRs, 75% overlap)
+-  Temporal branch (1D CNN + attention)
+-  4D edge features (Pearson, Partial, MI, Phase)
+-  Multi-scale GAT (k=10, 30, 100)
+-  Dual-stream fusion (temporal + spatial)
+-  Full dataset (~900 subjects vs. 351)
 
 **Expected Performance** (target):
 - Accuracy: **68-72%**
@@ -619,9 +619,9 @@ Applied during data loading:
 
 | Aspect | Baseline | Evolution | Gain |
 |--------|----------|-----------|------|
-| Temporal modeling | ❌ None | ✅ 1D CNN + Attention | +5-10% |
+| Temporal modeling |  None |  1D CNN + Attention | +5-10% |
 | Edge features | 1D (corr) | 4D (corr, partial, MI, phase) | +3-5% |
-| Multi-scale | ❌ Single k=20 | ✅ k=10,30,100 | +4-7% |
+| Multi-scale |  Single k=20 |  k=10,30,100 | +4-7% |
 | Data size | 351 subjects | ~900 subjects → 4,500 windows | +8-12% |
 | **Total Expected** | **52%** | **68-72%** | **+16-20%** |
 

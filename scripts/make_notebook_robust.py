@@ -8,9 +8,9 @@ import os
 import sys
 
 def install_dependencies():
-    print("📦 Installing torch-geometric and dependencies...")
+    print(" Installing torch-geometric and dependencies...")
     os.system('pip install -q torch-geometric torch-scatter torch-sparse')
-    print("✅ Dependencies installed.")
+    print(" Dependencies installed.")
 
 try:
     import torch_geometric

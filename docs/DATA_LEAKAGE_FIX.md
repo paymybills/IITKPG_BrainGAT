@@ -81,7 +81,7 @@ assert len(train_set & test2_set) == 0, "Train-Test2 overlap!"
 assert len(val_set & test1_set) == 0, "Val-Test1 overlap!"
 assert len(val_set & test2_set) == 0, "Val-Test2 overlap!"
 assert len(test1_set & test2_set) == 0, "Test1-Test2 overlap!"
-# ✅ No overlap - splits are clean!
+#  No overlap - splits are clean!
 ```
 
 ---
@@ -103,10 +103,10 @@ assert len(test1_set & test2_set) == 0, "Test1-Test2 overlap!"
 **New 60-75%**: Model learns "this is an ASD brain pattern" (generalization)
 
 The new numbers are:
-- ✅ Comparable to state-of-the-art (BrainGNN: 71-74%)
-- ✅ Realistic for fMRI-based ASD classification
-- ✅ Honest assessment of model capability
-- ✅ Can be trusted for real-world deployment
+-  Comparable to state-of-the-art (BrainGNN: 71-74%)
+-  Realistic for fMRI-based ASD classification
+-  Honest assessment of model capability
+-  Can be trusted for real-world deployment
 
 ---
 
@@ -157,16 +157,16 @@ The new numbers are:
 std_acc = np.std([val_acc, test1_acc, test2_acc])
 
 if std_acc < 3.0:
-    print("✅ Excellent consistency")
+    print(" Excellent consistency")
 elif std_acc < 5.0:
-    print("⚠️ Acceptable")
+    print(" Acceptable")
 else:
-    print("❌ High variance - overfitting")
+    print(" High variance - overfitting")
 
 # Test2 is the true estimate
 gap = abs(val_acc - test2_acc)
 if gap < 5.0:
-    print("✅ Excellent generalization")
+    print(" Excellent generalization")
 ```
 
 ---
@@ -254,18 +254,18 @@ max_configs = None  # For full search (96 configs, ~48 hours)
 
 ## Key Takeaways
 
-### ✅ What We Fixed
+###  What We Fixed
 1. **Data leakage**: Subject-level splitting prevents training on test subjects
 2. **Inflated metrics**: Now reporting realistic performance
 3. **Robustness**: Triple validation ensures consistency
 4. **Optimization**: Grid search finds best hyperparameters
 
-### ⚠️ What Changed
+###  What Changed
 1. **Accuracy dropped**: 95% → 60-75% (this is GOOD - it's now honest!)
 2. **Training time**: Longer (proper hyperparameter search + longer training)
 3. **Complexity**: More validation sets to track
 
-### 🎯 Why This Matters
+###  Why This Matters
 1. **Scientific integrity**: Can publish these results
 2. **Real-world deployment**: Performance estimates are trustworthy
 3. **Debugging**: Can now identify and fix real problems
@@ -291,4 +291,4 @@ max_configs = None  # For full search (96 configs, ~48 hours)
 
 **Document Version**: 1.0  
 **Date**: December 8, 2025  
-**Status**: ✅ Fixed and validated
+**Status**:  Fixed and validated

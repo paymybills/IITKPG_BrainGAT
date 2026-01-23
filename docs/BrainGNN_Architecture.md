@@ -58,7 +58,7 @@ Each subject's brain is represented as a graph $G = (V, E, X, r)$:
 
 ---
 
-## 📊 Data Processing Pipeline
+##  Data Processing Pipeline
 
 ### From fMRI Scan to Graph
 
@@ -170,7 +170,7 @@ def graph_from_timeseries(timeseries: np.ndarray, topk: int = 10):
 
 ---
 
-## 🔧 ROI-Aware Graph Convolution
+##  ROI-Aware Graph Convolution
 
 ### Standard GCN Limitation
 
@@ -305,7 +305,7 @@ class ROIPool(nn.Module):
 
 ---
 
-## 📈 Graph Readout: Mean + Max Pooling
+##  Graph Readout: Mean + Max Pooling
 
 ### The Fixed-Size Representation Problem
 
@@ -353,56 +353,56 @@ def mean_max_readout(x, batch):
 
 ---
 
-## 🏛️ Complete BrainGNN Architecture
+##  Complete BrainGNN Architecture
 
 ### Layer-by-Layer Breakdown
 
 ```
 Input: Graph with N=392 nodes, D=392 features
     ↓
-┌─────────────────────────────────────────────────┐
-│ ROI-Aware Conv Layer 1                          │
-│   - Input: 392-dim features                     │
-│   - GCN: Message passing with edge weights      │
-│   - ROI Embeddings: Learn region identities     │
-│   - Output: 128-dim features per node           │
-│   - BatchNorm + ReLU + Dropout(0.3)            │
-└─────────────────────────────────────────────────┘
+
+ ROI-Aware Conv Layer 1                          
+   - Input: 392-dim features                     
+   - GCN: Message passing with edge weights      
+   - ROI Embeddings: Learn region identities     
+   - Output: 128-dim features per node           
+   - BatchNorm + ReLU + Dropout(0.3)            
+
     ↓ (392 nodes, 128-dim each)
-┌─────────────────────────────────────────────────┐
-│ TopK Pooling Layer 1 (ratio=0.5)               │
-│   - Learn importance scores for each node       │
-│   - Select top 50% most important ROIs          │
-│   - Update edge connectivity                     │
-└─────────────────────────────────────────────────┘
+
+ TopK Pooling Layer 1 (ratio=0.5)               
+   - Learn importance scores for each node       
+   - Select top 50% most important ROIs          
+   - Update edge connectivity                     
+
     ↓ (196 nodes, 128-dim each)
-┌─────────────────────────────────────────────────┐
-│ ROI-Aware Conv Layer 2                          │
-│   - Input: 128-dim features                     │
-│   - Second level of feature abstraction         │
-│   - Output: 128-dim features per node           │
-│   - BatchNorm + ReLU + Dropout(0.3)            │
-└─────────────────────────────────────────────────┘
+
+ ROI-Aware Conv Layer 2                          
+   - Input: 128-dim features                     
+   - Second level of feature abstraction         
+   - Output: 128-dim features per node           
+   - BatchNorm + ReLU + Dropout(0.3)            
+
     ↓ (196 nodes, 128-dim each)
-┌─────────────────────────────────────────────────┐
-│ TopK Pooling Layer 2 (ratio=0.5)               │
-│   - Further refinement of important regions     │
-│   - Select top 50% of remaining nodes           │
-└─────────────────────────────────────────────────┘
+
+ TopK Pooling Layer 2 (ratio=0.5)               
+   - Further refinement of important regions     
+   - Select top 50% of remaining nodes           
+
     ↓ (98 nodes, 128-dim each)
-┌─────────────────────────────────────────────────┐
-│ Graph-Level Readout                             │
-│   - Mean Pooling: Average features (128-dim)    │
-│   - Max Pooling: Peak features (128-dim)        │
-│   - Concatenate: [mean || max] (256-dim)        │
-└─────────────────────────────────────────────────┘
+
+ Graph-Level Readout                             
+   - Mean Pooling: Average features (128-dim)    
+   - Max Pooling: Peak features (128-dim)        
+   - Concatenate: [mean || max] (256-dim)        
+
     ↓ (256-dim graph embedding)
-┌─────────────────────────────────────────────────┐
-│ MLP Classifier                                  │
-│   - Linear: 256 → 64                            │
-│   - ReLU + Dropout(0.5)                         │
-│   - Linear: 64 → 2 (Control vs ASD)            │
-└─────────────────────────────────────────────────┘
+
+ MLP Classifier                                  
+   - Linear: 256 → 64                            
+   - ReLU + Dropout(0.5)                         
+   - Linear: 64 → 2 (Control vs ASD)            
+
     ↓
 Output: [logit_control, logit_ASD] → Softmax → Probabilities
 ```
@@ -667,7 +667,7 @@ test_results = evaluate(model, test_loader)  # Final unbiased estimate
 
 ---
 
-## 📊 Expected Performance
+##  Expected Performance
 
 ### Realistic Accuracy Ranges
 
@@ -677,9 +677,9 @@ For ABIDE ASD classification (imaging only, proper splits):
 |----------|----------------|
 | 50-55% | Random chance (no learning) |
 | 55-60% | Weak signal detection |
-| **60-65%** | **Moderate performance** ✓ |
-| **65-70%** | **Good performance** ✓✓ |
-| **70-75%** | **Excellent performance** ✓✓✓ |
+| **60-65%** | **Moderate performance**  |
+| **65-70%** | **Good performance**  |
+| **70-75%** | **Excellent performance**  |
 | 75-80% | Exceptional (rare for imaging only) |
 | >80% | ** Suspicious - check for leakage!** |
 
@@ -721,7 +721,7 @@ Our approach prioritizes **scientific validity** over inflated metrics!
 
 ---
 
-## 🔧 Performance Optimization Strategies
+##  Performance Optimization Strategies
 
 ### Quick Wins (Easy to Implement)
 
@@ -1105,7 +1105,7 @@ $$
 
 ---
 
-## 🏁 Conclusion
+##  Conclusion
 
 BrainGNN demonstrates that **interpretable, scientifically rigorous ASD classification is possible using only brain imaging data**.
 
