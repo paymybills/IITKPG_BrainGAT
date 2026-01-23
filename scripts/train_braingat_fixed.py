@@ -388,7 +388,7 @@ if __name__ == "__main__":
         # Early Stopping
         early_stopping(val_loss)
         if early_stopping.early_stop:
-            print("⏹ Early stopping triggered!")
+            print("Early stopping triggered!")
             break
             
     print("Training complete.")
