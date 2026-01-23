@@ -321,7 +321,7 @@ if __name__ == "__main__":
             if val_acc > self.best_acc:
                 self.best_acc = val_acc
                 torch.save(model.state_dict(), self.filepath)
-                print(f"    New best model saved! (Acc: {val_acc:.2f}%)")
+                print(f"   New best model saved! (Acc: {val_acc:.2f}%)")
             
             # Also save latest checkpoint for crash recovery
             latest_path = self.filepath.replace('best_model', 'latest_checkpoint')
