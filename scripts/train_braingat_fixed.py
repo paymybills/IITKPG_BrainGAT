@@ -321,7 +321,7 @@ if __name__ == "__main__":
             if val_acc > self.best_acc:
                 self.best_acc = val_acc
                 torch.save(model.state_dict(), self.filepath)
-                print(f"   ✓ New best model saved! (Acc: {val_acc:.2f}%)")
+                print(f"   New best model saved! (Acc: {val_acc:.2f}%)")
             
             # Also save latest checkpoint for crash recovery
             latest_path = self.filepath.replace('best_model', 'latest_checkpoint')
@@ -388,7 +388,7 @@ if __name__ == "__main__":
         # Early Stopping
         early_stopping(val_loss)
         if early_stopping.early_stop:
-            print("⏹️ Early stopping triggered!")
+            print("Early stopping triggered!")
             break
             
     print("Training complete.")

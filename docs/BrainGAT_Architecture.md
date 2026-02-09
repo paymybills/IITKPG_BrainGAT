@@ -4,7 +4,7 @@
 
 ---
 
-## 📋 Overview
+##  Overview
 
 BrainGAT is a Graph Attention Network (GAT) inspired by the HCAN (Heterogeneous Graph Convolutional Attention Network) paper, but **critically modified to use only fMRI imaging data** without any phenotypic or demographic information.
 
@@ -15,7 +15,7 @@ BrainGAT is a Graph Attention Network (GAT) inspired by the HCAN (Heterogeneous 
 
 ---
 
-## 🧠 Architecture Components
+##  Architecture Components
 
 ### 1. Input: Graph Representation
 
@@ -42,7 +42,7 @@ Each subject's brain is represented as a graph $G = (V, E, X, E_{attr})$:
 
 ---
 
-## 🔧 Data Processing Pipeline
+##  Data Processing Pipeline
 
 ### Step 1: Time Series to Correlation Matrix
 
@@ -84,7 +84,7 @@ $$
 
 ---
 
-## 🏗️ Multi-Head Graph Attention Layer
+##  Multi-Head Graph Attention Layer
 
 ### Motivation
 
@@ -140,7 +140,7 @@ GATConv(
 
 ---
 
-## 📊 Complete BrainGAT Architecture
+##  Complete BrainGAT Architecture
 
 ### Layer-by-Layer Breakdown
 
@@ -210,7 +210,7 @@ This configuration retains the architectural benefits (attention, hierarchy) whi
 
 ---
 
-## 🎯 Training Strategy
+##  Training Strategy
 
 ### Optimization
 
@@ -261,7 +261,7 @@ scaler.update()
 
 ---
 
-## 📈 Data Split Strategy
+##  Data Split Strategy
 
 ### Subject-Level Stratified Splitting
 
@@ -291,7 +291,7 @@ Final: 245 / 53 / 53 (Train / Val / Test)
 
 ---
 
-## 🔍 Interpretability: Attention Weights
+##  Interpretability: Attention Weights
 
 ### Why Attention > Standard GCN?
 
@@ -320,7 +320,7 @@ $$
 
 ---
 
-## 📊 Comparison: BrainGAT vs HCAN
+##  Comparison: BrainGAT vs HCAN
 
 ### Architecture Differences
 
@@ -331,8 +331,8 @@ $$
 | **Graph Scope** | Population-level | Subject-level |
 | **Features** | fMRI + Demographics | fMRI only |
 | **Attention** | Heterogeneous Conv | Multi-head GAT |
-| **Phenotypic Data** | Age, Sex, Site, IQ | NONE ✓ |
-| **Data Leakage Risk** | HIGH ⚠️ | NONE ✓ |
+| **Phenotypic Data** | Age, Sex, Site, IQ | NONE  |
+| **Data Leakage Risk** | HIGH  | NONE  |
 | **Interpretability** | Limited | High (attention weights) |
 | **Training** | CPU/GPU | GPU-optimized (AMP) |
 
@@ -353,7 +353,7 @@ $$
 
 ---
 
-## 🎓 Key Design Decisions
+##  Key Design Decisions
 
 ### 1. Why Multi-Head Attention?
 
@@ -392,7 +392,7 @@ Edge weights provide richer information than binary edges.
 
 ---
 
-## 🚀 Implementation Highlights
+##  Implementation Highlights
 
 ### Code Structure
 
@@ -432,7 +432,7 @@ attention_weights = model.get_attention_weights(sample_graph)
 
 ---
 
-## 📚 Theoretical Foundation
+##  Theoretical Foundation
 
 ### Graph Neural Network Theory
 
@@ -467,7 +467,7 @@ Attention weights are **learned**, not fixed!
 
 ---
 
-## 🎯 Results Interpretation Guide
+##  Results Interpretation Guide
 
 ### What constitutes "good" performance?
 
@@ -477,11 +477,11 @@ Attention weights are **learned**, not fixed!
 |---------------|----------------|
 | 50-55% | Random chance (no learning) |
 | 55-60% | Weak signal detection |
-| 60-65% | Moderate performance ✓ |
-| 65-70% | Good performance ✓✓ |
-| 70-75% | Excellent performance ✓✓✓ |
+| 60-65% | Moderate performance  |
+| 65-70% | Good performance  |
+| 70-75% | Excellent performance  |
 | 75-80% | Exceptional (rare without phenotype) |
-| >80% | **Suspicious - check for leakage!** ⚠️ |
+| >80% | **Suspicious - check for leakage!**  |
 
 ### AUC Score Interpretation
 
@@ -489,14 +489,14 @@ Attention weights are **learned**, not fixed!
 |-----------|----------------|
 | 0.50 | Random classifier |
 | 0.60-0.65 | Weak discriminator |
-| 0.65-0.70 | Fair discriminator ✓ |
-| 0.70-0.75 | Good discriminator ✓✓ |
-| 0.75-0.80 | Strong discriminator ✓✓✓ |
+| 0.65-0.70 | Fair discriminator  |
+| 0.70-0.75 | Good discriminator  |
+| 0.75-0.80 | Strong discriminator  |
 | >0.80 | Excellent (verify no leakage) |
 
 ---
 
-## 🔬 Scientific Validity
+##  Scientific Validity
 
 ### Why This Approach is Scientifically Sound
 
@@ -524,7 +524,7 @@ Attention weights are **learned**, not fixed!
 
 ---
 
-## 🛠️ Potential Improvements
+##  Potential Improvements
 
 ### Short-Term Enhancements
 
@@ -568,7 +568,7 @@ Attention weights are **learned**, not fixed!
 
 ---
 
-## 📖 References & Resources
+##  References & Resources
 
 ### Key Papers
 
@@ -591,15 +591,15 @@ Attention weights are **learned**, not fixed!
 
 ---
 
-## 🏁 Conclusion
+##  Conclusion
 
 BrainGAT represents a **scientifically rigorous** approach to ASD classification using graph neural networks:
 
-✅ **No data leakage** (pure imaging features)  
-✅ **Interpretable** (attention weights)  
-✅ **GPU-optimized** (mixed precision training)  
-✅ **Biologically motivated** (brain connectivity graphs)  
-✅ **Reproducible** (documented methodology)
+ **No data leakage** (pure imaging features)  
+ **Interpretable** (attention weights)  
+ **GPU-optimized** (mixed precision training)  
+ **Biologically motivated** (brain connectivity graphs)  
+ **Reproducible** (documented methodology)
 
 While HCAN achieves higher accuracy by incorporating phenotypic information, BrainGAT demonstrates that **meaningful classification is possible using only brain imaging data**, making it more generalizable and scientifically valid for neuroimaging research.
 

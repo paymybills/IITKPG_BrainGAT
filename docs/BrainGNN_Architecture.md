@@ -58,7 +58,7 @@ Each subject's brain is represented as a graph $G = (V, E, X, r)$:
 
 ---
 
-## 📊 Data Processing Pipeline
+##  Data Processing Pipeline
 
 ### From fMRI Scan to Graph
 
@@ -170,7 +170,7 @@ def graph_from_timeseries(timeseries: np.ndarray, topk: int = 10):
 
 ---
 
-## 🔧 ROI-Aware Graph Convolution
+##  ROI-Aware Graph Convolution
 
 ### Standard GCN Limitation
 
@@ -305,7 +305,7 @@ class ROIPool(nn.Module):
 
 ---
 
-## 📈 Graph Readout: Mean + Max Pooling
+##  Graph Readout: Mean + Max Pooling
 
 ### The Fixed-Size Representation Problem
 
@@ -353,7 +353,7 @@ def mean_max_readout(x, batch):
 
 ---
 
-## 🏛️ Complete BrainGNN Architecture
+##  Complete BrainGNN Architecture
 
 ### Layer-by-Layer Breakdown
 
@@ -667,7 +667,7 @@ test_results = evaluate(model, test_loader)  # Final unbiased estimate
 
 ---
 
-## 📊 Expected Performance
+##  Expected Performance
 
 ### Realistic Accuracy Ranges
 
@@ -677,9 +677,9 @@ For ABIDE ASD classification (imaging only, proper splits):
 |----------|----------------|
 | 50-55% | Random chance (no learning) |
 | 55-60% | Weak signal detection |
-| **60-65%** | **Moderate performance** ✓ |
-| **65-70%** | **Good performance** ✓✓ |
-| **70-75%** | **Excellent performance** ✓✓✓ |
+| **60-65%** | **Moderate performance**  |
+| **65-70%** | **Good performance**  |
+| **70-75%** | **Excellent performance**  |
 | 75-80% | Exceptional (rare for imaging only) |
 | >80% | ** Suspicious - check for leakage!** |
 
@@ -721,7 +721,7 @@ Our approach prioritizes **scientific validity** over inflated metrics!
 
 ---
 
-## 🔧 Performance Optimization Strategies
+##  Performance Optimization Strategies
 
 ### Quick Wins (Easy to Implement)
 
@@ -1105,7 +1105,7 @@ $$
 
 ---
 
-## 🏁 Conclusion
+##  Conclusion
 
 BrainGNN demonstrates that **interpretable, scientifically rigorous ASD classification is possible using only brain imaging data**.
 
